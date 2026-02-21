@@ -1,0 +1,12 @@
+services:
+  music-thing:
+    build: .
+    container_name: music-thing
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-https://triton.squid.wtf}
+      - MUSIC_DIR=/music
+    volumes:
+      - ./music:/music

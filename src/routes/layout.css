@@ -1,3 +1,8 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+/* Custom color for hover state between neutral-800 and neutral-700 */
+@theme {
+	--color-neutral-750: #333338;
+}
