@@ -4,7 +4,9 @@
 	import SidePanel from '$lib/components/SidePanel.svelte';
 	import type { Track, Album, SearchResult, Quality } from '$lib/types';
 	import { downloads, downloadingTrackIds, downloadingAlbumIds, downloadItems } from '$lib/stores/downloads';
+	import { libraryIndex } from '$lib/stores/libraryIndex';
 	import { toasts } from '$lib/stores/toasts';
+	import { onMount } from 'svelte';
 
 	let { data } = $props();
 
@@ -23,14 +25,20 @@
 	// Track completed downloads to trigger library refresh
 	let lastCompletedCount = $state(0);
 
+	// Load library index on mount
+	onMount(() => {
+		libraryIndex.load();
+	});
+
 	// Auto-refresh library when downloads complete
 	$effect(() => {
 		const items = $downloadItems;
 		const completedCount = items.filter((i) => i.status === 'complete').length;
 		
 		if (completedCount > lastCompletedCount && sidePanel) {
-			// New download completed, refresh library
+			// New download completed, refresh library and library index
 			sidePanel.refresh();
+			libraryIndex.refresh();
 		}
 		lastCompletedCount = completedCount;
 	});
@@ -43,10 +51,10 @@
 
 		try {
 			const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&type=${type}`);
-			const data: SearchResult<Track> | SearchResult<Album> = await response.json();
+			const data = await response.json();
 
 			if (!response.ok) {
-				throw new Error((data as { error?: string }).error || 'Search failed');
+				throw new Error(data.error || data.detail || 'Search failed');
 			}
 
 			if (type === 'tracks') {
@@ -57,7 +65,9 @@
 				tracks = [];
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Search failed';
+			const message = e instanceof Error ? e.message : 'Search failed';
+			error = message;
+			toasts.error(message);
 			tracks = [];
 			albums = [];
 		} finally {
@@ -74,9 +84,9 @@
 		}
 	}
 
-	async function handleDownloadAlbum(album: Album, quality: Quality) {
+	async function handleDownloadAlbum(album: Album, quality: Quality, selectedTrackIds?: number[]) {
 		try {
-			await downloads.startDownload('album', album.id, undefined, quality);
+			await downloads.startDownload('album', album.id, undefined, quality, selectedTrackIds);
 		} catch (e) {
 			const message = e instanceof Error ? e.message : 'Failed to start download';
 			toasts.error(message);

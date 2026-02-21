@@ -18,11 +18,12 @@ interface AlbumInfo {
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const body = await request.json();
-		const { type, id, track, quality = DEFAULT_QUALITY } = body as {
+		const { type, id, track, quality = DEFAULT_QUALITY, selectedTrackIds } = body as {
 			type: 'track' | 'album';
 			id: number;
 			track?: Parameters<typeof startTrackDownload>[0];
 			quality?: Quality;
+			selectedTrackIds?: number[];
 		};
 
 		if (!type || !id) {
@@ -35,20 +36,24 @@ export const POST: RequestHandler = async ({ request }) => {
 		let artistName: string | undefined;
 
 		if (type === 'track') {
-			// If full track object provided, use it; otherwise fetch it
 			const trackData = track || await getTrackInfo(id);
 			jobId = await startTrackDownload(trackData, quality);
 		} else if (type === 'album') {
-			// Fetch album info upfront to get track list
 			const album = await getAlbum(id);
-			jobId = await startAlbumDownload(id, quality);
+			jobId = await startAlbumDownload(id, quality, selectedTrackIds);
 			
-			// Collect track info for pending display
-			pendingTracks = album.tracks.map(t => ({
+			// Filter pending tracks based on selection
+			const allTracks = album.tracks.map(t => ({
 				id: t.id,
 				title: t.title,
 				trackNumber: t.trackNumber
 			}));
+			
+			if (selectedTrackIds && selectedTrackIds.length > 0) {
+				pendingTracks = allTracks.filter(t => selectedTrackIds.includes(t.id));
+			} else {
+				pendingTracks = allTracks;
+			}
 			albumTitle = album.title;
 			artistName = album.artist?.name || album.artists?.[0]?.name;
 		} else {

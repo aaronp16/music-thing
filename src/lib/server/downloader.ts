@@ -68,28 +68,38 @@ function getExtension(quality: Quality): string {
 /**
  * Generate file path for a track
  */
-function getFilePath(track: Track, quality: Quality = DEFAULT_QUALITY): string {
+function getFilePath(track: Track, quality: Quality = DEFAULT_QUALITY, hasMultipleVolumes = false): string {
 	const artistName = sanitize(track.artist?.name || track.artists?.[0]?.name || 'Unknown Artist');
 	const albumTitle = sanitize(track.album?.title || 'Unknown Album');
 	const trackNum = String(track.trackNumber || 1).padStart(2, '0');
 	const trackTitle = sanitize(track.title);
 	const ext = getExtension(quality);
 	
+	// Check for multi-disk - always create disk folders if album has multiple volumes
+	const diskNum = track.volumeNumber || 1;
+	const diskFolder = (hasMultipleVolumes || diskNum > 1) ? `Disk ${diskNum}` : null;
+	
+	// Build path - include disk folder if multiple volumes OR disk > 1
+	const folderPath = diskFolder 
+		? path.join(albumTitle, diskFolder)
+		: albumTitle;
+	
 	return path.join(
 		env.MUSIC_DIR,
 		artistName,
-		albumTitle,
+		folderPath,
 		`${trackNum} - ${trackTitle}.${ext}`
 	);
 }
 
 /**
- * Get album folder path
+ * Get album folder path (for cover art)
  */
 function getAlbumPath(track: Track): string {
 	const artistName = sanitize(track.artist?.name || track.artists?.[0]?.name || 'Unknown Artist');
 	const albumTitle = sanitize(track.album?.title || 'Unknown Album');
 	
+	// For multi-disk albums, put cover in the main album folder
 	return path.join(env.MUSIC_DIR, artistName, albumTitle);
 }
 
@@ -147,9 +157,10 @@ async function downloadTrack(
 	jobId: string,
 	onProgress: (progress: DownloadProgress) => void,
 	quality: Quality = DEFAULT_QUALITY,
-	totalTracks?: number
+	totalTracks?: number,
+	hasMultipleVolumes = false
 ): Promise<DownloadProgress> {
-	const filePath = getFilePath(track, quality);
+	const filePath = getFilePath(track, quality, hasMultipleVolumes);
 	const albumPath = getAlbumPath(track);
 	const coverPath = path.join(albumPath, 'cover.jpg');
 	
@@ -169,14 +180,14 @@ async function downloadTrack(
 		progressState.status = 'downloading';
 		onProgress(progressState);
 		
-		// Create directory
-		await mkdir(albumPath, { recursive: true });
-		
-		// Get stream URL (with automatic quality fallback)
+		// Get stream URL first to determine actual quality (may fallback)
 		const { url: streamUrl, actualQuality } = await getStreamUrlWithFallback(track.id, quality);
 		
 		// Update file path if quality changed due to fallback
 		const actualFilePath = actualQuality !== quality ? getFilePath(track, actualQuality) : filePath;
+		
+		// Create directory (use actual file path to include disk folders)
+		await mkdir(path.dirname(actualFilePath), { recursive: true });
 		
 		// Download with progress
 		const response = await fetch(streamUrl);
@@ -330,15 +341,29 @@ export async function startTrackDownload(track: Track, quality: Quality = DEFAUL
 /**
  * Start downloading an album (sequential track downloads)
  */
-export async function startAlbumDownload(albumId: number, quality: Quality = DEFAULT_QUALITY): Promise<string> {
+export async function startAlbumDownload(
+	albumId: number, 
+	quality: Quality = DEFAULT_QUALITY,
+	selectedTrackIds?: number[]
+): Promise<string> {
 	const jobId = generateJobId();
 	
 	// Fetch album with tracks
 	const album = await getAlbum(albumId);
-	const tracks = album.tracks || [];
+	const allTracks = album.tracks || [];
+	const hasMultipleVolumes = (album.numberOfVolumes || 1) > 1;
+	
+	if (allTracks.length === 0) {
+		throw new Error('Album has no tracks');
+	}
+	
+	// Filter tracks based on selection
+	const tracks = selectedTrackIds && selectedTrackIds.length > 0
+		? allTracks.filter(t => selectedTrackIds.includes(t.id))
+		: allTracks;
 	
 	if (tracks.length === 0) {
-		throw new Error('Album has no tracks');
+		throw new Error('No tracks selected');
 	}
 	
 	const totalTracks = tracks.length;
@@ -382,7 +407,7 @@ export async function startAlbumDownload(albumId: number, quality: Quality = DEF
 				await downloadTrack(track, jobId, (progress) => {
 					job.progress.set(track.id, progress);
 					notifyProgress(jobId, progress);
-				}, quality, totalTracks);
+				}, quality, totalTracks, hasMultipleVolumes);
 			}
 		} finally {
 			// Keep job around for a bit

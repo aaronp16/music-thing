@@ -5,9 +5,12 @@
 	interface Props {
 		onDownload: (quality: Quality) => void;
 		downloading?: boolean;
+		disabled?: boolean;
 	}
 
-	let { onDownload, downloading = false }: Props = $props();
+	let { onDownload, downloading = false, disabled = false }: Props = $props();
+	
+	const isDisabled = $derived(downloading || disabled);
 
 	let dropdownOpen = $state(false);
 
@@ -42,7 +45,7 @@
 		<!-- Main download button -->
 		<button
 			onclick={handleDownloadClick}
-			disabled={downloading}
+			disabled={isDisabled}
 			class="flex cursor-pointer items-center gap-1.5 rounded-l-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
 		>
 			{#if downloading}
@@ -72,7 +75,7 @@
 		<!-- Dropdown toggle -->
 		<button
 			onclick={toggleDropdown}
-			disabled={downloading}
+			disabled={isDisabled}
 			class="cursor-pointer rounded-r-lg border-l border-green-700 bg-green-600 px-1.5 py-1.5 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
 			aria-label="Select quality"
 		>

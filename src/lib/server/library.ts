@@ -18,10 +18,16 @@ export interface LibraryTrack {
 	quality: string; // 'LOSSLESS', 'HI_RES', 'HIGH', 'LOW', or custom like '320kbps'
 }
 
+export interface LibraryDisk {
+	name: string; // 'Disk 1', 'Disk 2', etc.
+	path: string;
+	tracks: LibraryTrack[];
+}
+
 export interface LibraryAlbum {
 	name: string;
 	path: string;
-	tracks: LibraryTrack[];
+	disks: LibraryDisk[];
 	hasCover: boolean;
 }
 
@@ -126,7 +132,8 @@ async function fileExists(path: string): Promise<boolean> {
 
 /**
  * Scan the music directory and return the library structure
- * Structure: MUSIC_DIR/Artist/Album/01 - Track.flac
+ * Structure: MUSIC_DIR/Artist/Album/Disk 1/01 - Track.flac
+ * OR: MUSIC_DIR/Artist/Album/01 - Track.flac (single disk)
  */
 export async function scanLibrary(): Promise<Library> {
 	const musicDir = env.MUSIC_DIR;
@@ -168,30 +175,74 @@ export async function scanLibrary(): Promise<Library> {
 			const album: LibraryAlbum = {
 				name: albumName,
 				path: albumPath,
-				tracks: [],
+				disks: [],
 				hasCover: await fileExists(join(albumPath, 'cover.jpg'))
 			};
 
-			// Read track files
-			const files = await readdir(albumPath);
+			// Check for disk folders (Disk 1, Disk 2, etc.)
+			const albumContents = await readdir(albumPath);
+			const diskFolders = albumContents.filter(f => f.startsWith('Disk '));
+			
+			if (diskFolders.length > 0) {
+				// Multi-disk album
+				for (const diskName of diskFolders.sort()) {
+					const diskPath = join(albumPath, diskName);
+					if (!(await isDirectory(diskPath))) continue;
 
-			for (const fileName of files.sort()) {
-				// Only include audio files
-				if (fileName.endsWith('.flac') || fileName.endsWith('.mp3') || fileName.endsWith('.m4a')) {
-					const trackPath = join(albumPath, fileName);
-					const { format, quality } = await getTrackQuality(trackPath);
-					album.tracks.push({
-						name: fileName,
-						path: trackPath,
-						format,
-						quality
-					});
-					totalTracks++;
+					const disk: LibraryDisk = {
+						name: diskName,
+						path: diskPath,
+						tracks: []
+					};
+
+					const files = await readdir(diskPath);
+					for (const fileName of files.sort()) {
+						if (fileName.endsWith('.flac') || fileName.endsWith('.mp3') || fileName.endsWith('.m4a')) {
+							const trackPath = join(diskPath, fileName);
+							const { format, quality } = await getTrackQuality(trackPath);
+							disk.tracks.push({
+								name: fileName,
+								path: trackPath,
+								format,
+								quality
+							});
+							totalTracks++;
+						}
+					}
+
+					if (disk.tracks.length > 0) {
+						album.disks.push(disk);
+					}
+				}
+			} else {
+				// Single disk (no Disk folder) - tracks directly in album folder
+				const disk: LibraryDisk = {
+					name: 'Disk 1',
+					path: albumPath,
+					tracks: []
+				};
+
+				for (const fileName of albumContents.sort()) {
+					if (fileName.endsWith('.flac') || fileName.endsWith('.mp3') || fileName.endsWith('.m4a')) {
+						const trackPath = join(albumPath, fileName);
+						const { format, quality } = await getTrackQuality(trackPath);
+						disk.tracks.push({
+							name: fileName,
+							path: trackPath,
+							format,
+							quality
+						});
+						totalTracks++;
+					}
+				}
+
+				if (disk.tracks.length > 0) {
+					album.disks.push(disk);
 				}
 			}
 
 			// Only include albums with tracks
-			if (album.tracks.length > 0) {
+			if (album.disks.length > 0) {
 				artist.albums.push(album);
 				totalAlbums++;
 			}

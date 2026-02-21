@@ -14,10 +14,16 @@
 		quality: string;
 	}
 
-	interface LibraryAlbum {
+	interface LibraryDisk {
 		name: string;
 		path: string;
 		tracks: LibraryTrack[];
+	}
+
+	interface LibraryAlbum {
+		name: string;
+		path: string;
+		disks: LibraryDisk[];
 		hasCover: boolean;
 	}
 
@@ -94,11 +100,15 @@
 		}
 	}
 
-	// Auto-switch to downloads tab when a download starts
+	// Auto-switch to downloads tab when a NEW download starts (not continuously)
+	let previousDownloadCount = $state(0);
 	$effect(() => {
-		if ($hasActiveDownloads && activeTab === 'library') {
+		const currentCount = $downloadItems.filter(i => i.status === 'downloading' || i.status === 'pending').length;
+		// Only switch if a new download was added (count increased)
+		if (currentCount > previousDownloadCount && activeTab === 'library') {
 			activeTab = 'downloads';
 		}
+		previousDownloadCount = currentCount;
 	});
 
 	// ==========================================================================
@@ -120,16 +130,37 @@
 
 			for (const album of artist.albums) {
 				const albumMatches = album.name.toLowerCase().includes(query);
-				const matchingTracks = album.tracks.filter((t) =>
-					t.name.toLowerCase().includes(query)
-				);
+				
+				// Check tracks in all disks
+				let matchingTracks: LibraryTrack[] = [];
+				for (const disk of album.disks) {
+					const diskMatchingTracks = disk.tracks.filter((t) =>
+						t.name.toLowerCase().includes(query)
+					);
+					matchingTracks = [...matchingTracks, ...diskMatchingTracks];
+				}
 
 				if (artistMatches || albumMatches || matchingTracks.length > 0) {
+					// Include all disks if artist/album matches, otherwise only matching tracks
+					const newDisks = artistMatches || albumMatches 
+						? album.disks 
+						: album.disks.map(disk => ({
+							...disk,
+							tracks: disk.tracks.filter(t => 
+								t.name.toLowerCase().includes(query) || 
+								(artistMatches || albumMatches)
+							)
+						}));
+					
 					matchingAlbums.push({
 						...album,
-						tracks: artistMatches || albumMatches ? album.tracks : matchingTracks
+						disks: newDisks
 					});
-					totalTracks += artistMatches || albumMatches ? album.tracks.length : matchingTracks.length;
+					
+					const trackCount = artistMatches || albumMatches 
+						? album.disks.reduce((sum, d) => sum + d.tracks.length, 0)
+						: matchingTracks.length;
+					totalTracks += trackCount;
 				}
 			}
 
@@ -381,6 +412,7 @@
 								{#if expandedArtists.has(artist.name)}
 									<div class="ml-4 space-y-1" transition:slide={{ duration: 150 }}>
 										{#each artist.albums as album}
+											{@const hasMultipleDisks = album.disks.length > 1}
 											<div>
 												<button
 													onclick={() => toggleAlbum(album.path)}
@@ -399,38 +431,50 @@
 														<path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
 													</svg>
 													<span class="truncate">{album.name}</span>
-													<span class="ml-auto flex-shrink-0 text-xs text-neutral-500">{album.tracks.length}</span>
+													<span class="ml-auto flex-shrink-0 text-xs text-neutral-500">
+														{album.disks.reduce((sum, d) => sum + d.tracks.length, 0)} tracks
+														{#if hasMultipleDisks}
+															({album.disks.length} disks)
+														{/if}
+													</span>
 												</button>
 
 												{#if expandedAlbums.has(album.path)}
 													<div class="ml-4 space-y-0.5" transition:slide={{ duration: 150 }}>
-														{#each album.tracks as track}
-															<div class="flex items-center gap-2 rounded px-2 py-1 text-sm text-neutral-400">
-																<svg class="h-4 w-4 flex-shrink-0 text-neutral-600" fill="currentColor" viewBox="0 0 24 24">
-																	<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-																</svg>
-																<span class="truncate">{track.name.replace(/\.(flac|m4a|mp3|wav|ogg)$/i, '')}</span>
-																<div class="ml-auto flex flex-shrink-0 items-center gap-1">
-																	<span 
-																		class="rounded px-1.5 py-0.5 text-[10px] font-medium"
-																		class:bg-green-900={track.format === 'FLAC'}
-																		class:text-green-300={track.format === 'FLAC'}
-																		class:bg-orange-900={track.format === 'AAC'}
-																		class:text-orange-300={track.format === 'AAC'}
-																		class:bg-purple-900={track.format === 'MP3'}
-																		class:text-purple-300={track.format === 'MP3'}
-																		class:bg-neutral-700={track.format !== 'FLAC' && track.format !== 'AAC' && track.format !== 'MP3'}
-																		class:text-neutral-400={track.format !== 'FLAC' && track.format !== 'AAC' && track.format !== 'MP3'}
-																	>
-																		{track.format}
-																	</span>
-																	{#if track.quality}
-																		<span class="rounded bg-neutral-700 px-1.5 py-0.5 text-[10px] text-neutral-300">
-																			{track.quality}
-																		</span>
-																	{/if}
+														{#each album.disks as disk}
+															{#if hasMultipleDisks}
+																<div class="px-2 py-1 text-xs font-medium text-neutral-500">
+																	{disk.name}
 																</div>
-															</div>
+															{/if}
+															{#each disk.tracks as track}
+																<div class="flex items-center gap-2 rounded px-2 py-1 text-sm text-neutral-400">
+																	<svg class="h-4 w-4 flex-shrink-0 text-neutral-600" fill="currentColor" viewBox="0 0 24 24">
+																		<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+																	</svg>
+																	<span class="truncate">{track.name.replace(/\.(flac|m4a|mp3|wav|ogg)$/i, '')}</span>
+																	<div class="ml-auto flex flex-shrink-0 items-center gap-1">
+																		<span 
+																			class="rounded px-1.5 py-0.5 text-[10px] font-medium"
+																			class:bg-green-900={track.format === 'FLAC'}
+																			class:text-green-300={track.format === 'FLAC'}
+																			class:bg-orange-900={track.format === 'AAC'}
+																			class:text-orange-300={track.format === 'AAC'}
+																			class:bg-purple-900={track.format === 'MP3'}
+																			class:text-purple-300={track.format === 'MP3'}
+																			class:bg-neutral-700={track.format !== 'FLAC' && track.format !== 'AAC' && track.format !== 'MP3'}
+																			class:text-neutral-400={track.format !== 'FLAC' && track.format !== 'AAC' && track.format !== 'MP3'}
+																		>
+																			{track.format}
+																		</span>
+																		{#if track.quality}
+																			<span class="rounded bg-neutral-700 px-1.5 py-0.5 text-[10px] text-neutral-300">
+																				{track.quality}
+																			</span>
+																		{/if}
+																	</div>
+																</div>
+															{/each}
 														{/each}
 													</div>
 												{/if}

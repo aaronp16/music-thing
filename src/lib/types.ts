@@ -13,6 +13,7 @@ export interface Album {
 	title: string;
 	cover: string;
 	numberOfTracks?: number;
+	numberOfVolumes?: number;
 	duration?: number;
 	releaseDate?: string;
 	artist?: Artist;

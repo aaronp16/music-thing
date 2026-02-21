@@ -20,6 +20,7 @@ export interface Album {
 	title: string;
 	cover: string;
 	numberOfTracks?: number;
+	numberOfVolumes?: number;
 	duration?: number;
 	releaseDate?: string;
 	artist?: Artist;
@@ -239,10 +240,12 @@ async function apiRequest<T>(endpoint: string): Promise<T> {
 				throw error;
 			}
 
-			// Success - mark provider as healthy
-			markProviderSuccess(baseUrl);
-
+			// Parse JSON response
 			const json: ApiResponse<T> = await response.json();
+			
+			// Success - mark provider as healthy (after successful parse)
+			markProviderSuccess(baseUrl);
+			
 			return json.data;
 		} catch (error) {
 			// Network errors are retryable
@@ -259,8 +262,10 @@ async function apiRequest<T>(endpoint: string): Promise<T> {
 			}
 
 			// Unknown error, try next provider
-			lastError = error as Error;
 			markProviderFailed(baseUrl);
+			lastError = error as Error;
+			console.warn(`[hifi-client] ${baseUrl} unknown error: ${error instanceof Error ? error.message : error}, trying next provider...`);
+			continue;
 		}
 	}
 

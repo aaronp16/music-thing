@@ -1,0 +1,17 @@
+# Example docker-compose for homelab deployment
+# Copy this to docker-compose.yml and adjust as needed
+
+services:
+  music-thing:
+    image: ghcr.io/aaronp16/music-thing:latest
+    container_name: music-thing
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount your music library directory
+      - /path/to/your/music:/music
+    environment:
+      # Optional: Override default API providers (comma-separated)
+      # - API_PROVIDERS=https://triton.squid.wtf,https://api.monochrome.tf,https://wolf.qqdl.site
+      - NODE_ENV=production

@@ -56,13 +56,14 @@ function createDownloadsStore() {
 			type: 'track' | 'album',
 			id: number,
 			track?: { id: number; title: string; artist: { name: string }; album: { title: string } },
-			quality: Quality = DEFAULT_QUALITY
+			quality: Quality = DEFAULT_QUALITY,
+			selectedTrackIds?: number[]
 		) => {
 			// Call download API
 			const response = await fetch('/api/download', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ type, id, track, quality })
+				body: JSON.stringify({ type, id, track, quality, selectedTrackIds })
 			});
 
 			if (!response.ok) {
