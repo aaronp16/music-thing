@@ -406,7 +406,7 @@
 										<path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
 									</svg>
 									<span class="truncate">{artist.name}</span>
-									<span class="ml-auto flex-shrink-0 text-xs text-neutral-500">{artist.albums.length}</span>
+									<span class="ml-auto flex-shrink-0 text-xs text-neutral-500">{artist.albums.reduce((sum, a) => sum + a.disks.reduce((s, d) => s + d.tracks.length, 0), 0)}</span>
 								</button>
 
 								{#if expandedArtists.has(artist.name)}
@@ -427,9 +427,17 @@
 													>
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 													</svg>
-													<svg class="h-4 w-4 flex-shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-														<path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
-													</svg>
+													{#if album.hasCover}
+														<img 
+															src="/api/library/cover?path={encodeURIComponent(album.path)}" 
+															alt=""
+															class="h-5 w-5 flex-shrink-0 rounded-sm object-cover"
+														/>
+													{:else}
+														<svg class="h-5 w-5 flex-shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+															<path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
+														</svg>
+													{/if}
 													<span class="truncate">{album.name}</span>
 													<span class="ml-auto flex-shrink-0 text-xs text-neutral-500">
 														{album.disks.reduce((sum, d) => sum + d.tracks.length, 0)} tracks
