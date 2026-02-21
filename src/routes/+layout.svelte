@@ -3,17 +3,25 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import DiskSpace from '$lib/components/DiskSpace.svelte';
 
-	let { children } = $props();
+	interface Props {
+		data: { slogan: string };
+		children: import('svelte').Snippet;
+	}
+
+	let { data, children }: Props = $props();
 </script>
 
 <svelte:head>
-	<title>music-thing</title>
+	<title>Music Thing</title>
 </svelte:head>
 
 <div class="flex h-screen flex-col bg-neutral-900 text-white">
 	<!-- Header -->
 	<header class="flex h-14 flex-shrink-0 items-center justify-between border-b border-neutral-800 px-4">
-		<h1 class="text-xl font-bold">music-thing</h1>
+		<div class="flex items-center gap-3">
+			<h1 class="text-xl font-bold">Music Thing</h1>
+			<span class="text-sm text-neutral-500 italic">{data.slogan}</span>
+		</div>
 		<DiskSpace />
 	</header>
 

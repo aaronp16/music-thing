@@ -3,7 +3,7 @@
  */
 
 import { createWriteStream } from 'fs';
-import { mkdir, access, constants } from 'fs/promises';
+import { mkdir, access, constants, unlink, copyFile, readdir } from 'fs/promises';
 import path from 'path';
 import { env } from './env';
 import { getStreamUrlWithFallback, getCoverUrl, getAlbum, type Track, type Album, type AlbumWithTracks, type Quality as HifiQuality } from './hifi-client';
@@ -145,6 +145,67 @@ export function formatBytes(bytes: number): string {
 	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
+/**
+ * Get temp file path for a download
+ * Returns null if temp downloads are disabled (dev mode)
+ */
+function getTempFilePath(jobId: string, trackId: number, ext: string): string | null {
+	if (!env.TEMP_DIR) return null;
+	return path.join(env.TEMP_DIR, `${jobId}-${trackId}.${ext}`);
+}
+
+/**
+ * Move file from temp to final destination (cross-device safe)
+ * Uses copy + delete since temp and music dirs are on different filesystems
+ */
+async function moveFile(src: string, dest: string): Promise<void> {
+	await copyFile(src, dest);
+	await unlink(src);
+}
+
+/**
+ * Safely delete a temp file (ignores errors)
+ */
+async function cleanupTempFile(tempPath: string | null): Promise<void> {
+	if (!tempPath) return;
+	try {
+		await unlink(tempPath);
+	} catch {
+		// Ignore cleanup errors
+	}
+}
+
+/**
+ * Initialize temp directory on startup
+ * - Creates the directory if it doesn't exist
+ * - Cleans up any orphaned files from previous sessions
+ */
+export async function initTempDir(): Promise<void> {
+	if (!env.TEMP_DIR) return;
+	
+	try {
+		// Create temp directory
+		await mkdir(env.TEMP_DIR, { recursive: true });
+		
+		// Clean up any existing files (orphaned from crashed downloads)
+		const files = await readdir(env.TEMP_DIR);
+		for (const file of files) {
+			try {
+				await unlink(path.join(env.TEMP_DIR, file));
+			} catch {
+				// Ignore individual file cleanup errors
+			}
+		}
+		
+		console.log(`[downloader] Temp directory initialized: ${env.TEMP_DIR} (cleaned ${files.length} orphaned files)`);
+	} catch (err) {
+		console.error('[downloader] Failed to initialize temp directory:', err);
+	}
+}
+
+// Initialize temp directory on module load
+initTempDir();
+
 // =============================================================================
 // Download Logic
 // =============================================================================
@@ -176,6 +237,10 @@ async function downloadTrack(
 		totalBytes: 0
 	};
 	
+	// Determine if using temp download (production) or direct (dev)
+	const ext = getExtension(quality);
+	let tempFilePath = getTempFilePath(jobId, track.id, ext);
+	
 	try {
 		progressState.status = 'downloading';
 		onProgress(progressState);
@@ -184,10 +249,19 @@ async function downloadTrack(
 		const { url: streamUrl, actualQuality } = await getStreamUrlWithFallback(track.id, quality);
 		
 		// Update file path if quality changed due to fallback
-		const actualFilePath = actualQuality !== quality ? getFilePath(track, actualQuality) : filePath;
+		const actualFilePath = actualQuality !== quality ? getFilePath(track, actualQuality, hasMultipleVolumes) : filePath;
 		
-		// Create directory (use actual file path to include disk folders)
-		await mkdir(path.dirname(actualFilePath), { recursive: true });
+		// Update temp file path if quality changed
+		if (actualQuality !== quality && tempFilePath) {
+			const actualExt = getExtension(actualQuality);
+			tempFilePath = getTempFilePath(jobId, track.id, actualExt);
+		}
+		
+		// Determine where to write the download
+		const downloadPath = tempFilePath || actualFilePath;
+		
+		// Create directory for download destination
+		await mkdir(path.dirname(downloadPath), { recursive: true });
 		
 		// Download with progress
 		const response = await fetch(streamUrl);
@@ -199,8 +273,8 @@ async function downloadTrack(
 		const totalBytes = parseInt(response.headers.get('content-length') || '0');
 		progressState.totalBytes = totalBytes;
 		
-		// Stream to file
-		const writer = createWriteStream(actualFilePath);
+		// Stream to file (temp or final depending on environment)
+		const writer = createWriteStream(downloadPath);
 		const reader = response.body?.getReader();
 		
 		if (!reader) {
@@ -218,8 +292,8 @@ async function downloadTrack(
 			bytesDownloaded += value.length;
 			
 			progressState.bytesDownloaded = bytesDownloaded;
-			// Reserve last 5% for metadata embedding
-			progressState.progress = totalBytes > 0 ? Math.round((bytesDownloaded / totalBytes) * 95) : 0;
+			// Reserve last 5% for metadata embedding + move
+			progressState.progress = totalBytes > 0 ? Math.round((bytesDownloaded / totalBytes) * 90) : 0;
 			onProgress(progressState);
 		}
 		
@@ -231,17 +305,25 @@ async function downloadTrack(
 			writer.on('error', reject);
 		});
 		
-		// Embed metadata
+		// Embed metadata (in temp file if using temp downloads)
 		try {
 			const metadata = extractMetadata(track, totalTracks);
 			// Check if cover art exists for embedding
 			if (await fileExists(coverPath)) {
 				metadata.coverArtPath = coverPath;
 			}
-			await embedMetadata(actualFilePath, metadata);
+			await embedMetadata(downloadPath, metadata);
 		} catch (metadataError) {
 			// Log but don't fail the download if metadata embedding fails
 			console.error('Failed to embed metadata:', metadataError);
+		}
+		
+		// If using temp downloads, move to final destination
+		if (tempFilePath) {
+			// Create final directory
+			await mkdir(path.dirname(actualFilePath), { recursive: true });
+			// Move file (copy + delete for cross-device)
+			await moveFile(tempFilePath, actualFilePath);
 		}
 		
 		progressState.status = 'complete';
@@ -251,6 +333,9 @@ async function downloadTrack(
 		return progressState;
 		
 	} catch (error) {
+		// Clean up temp file on error
+		await cleanupTempFile(tempFilePath);
+		
 		progressState.status = 'error';
 		progressState.error = error instanceof Error ? error.message : 'Download failed';
 		onProgress(progressState);
@@ -270,6 +355,11 @@ async function downloadCoverArt(track: Track): Promise<void> {
 		return;
 	}
 	
+	// Generate a unique temp file name for cover art
+	const tempCoverPath = env.TEMP_DIR 
+		? path.join(env.TEMP_DIR, `cover-${track.album?.id || Date.now()}.jpg`)
+		: null;
+	
 	try {
 		const coverUuid = track.album?.cover;
 		if (!coverUuid) return;
@@ -279,10 +369,14 @@ async function downloadCoverArt(track: Track): Promise<void> {
 		
 		if (!response.ok) return;
 		
-		await mkdir(albumPath, { recursive: true });
+		// Determine download path (temp or final)
+		const downloadPath = tempCoverPath || coverPath;
+		
+		// Create directory for download destination
+		await mkdir(path.dirname(downloadPath), { recursive: true });
 		
 		const buffer = await response.arrayBuffer();
-		const writer = createWriteStream(coverPath);
+		const writer = createWriteStream(downloadPath);
 		writer.write(Buffer.from(buffer));
 		writer.end();
 		
@@ -290,7 +384,15 @@ async function downloadCoverArt(track: Track): Promise<void> {
 			writer.on('finish', resolve);
 			writer.on('error', reject);
 		});
+		
+		// If using temp downloads, move to final destination
+		if (tempCoverPath) {
+			await mkdir(albumPath, { recursive: true });
+			await moveFile(tempCoverPath, coverPath);
+		}
 	} catch {
+		// Clean up temp file on error
+		await cleanupTempFile(tempCoverPath);
 		// Ignore cover art errors
 	}
 }

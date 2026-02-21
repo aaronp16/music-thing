@@ -27,7 +27,20 @@ function getApiProviders(): string[] {
 	return DEFAULT_API_PROVIDERS;
 }
 
+/**
+ * Get temp directory for downloads
+ * - Production: Use /tmp/music-thing to avoid music client scanning issues
+ * - Development: null (download directly to MUSIC_DIR)
+ */
+function getTempDir(): string | null {
+	if (process.env.NODE_ENV === 'production') {
+		return '/tmp/music-thing';
+	}
+	return null;
+}
+
 export const env = {
 	API_PROVIDERS: getApiProviders(),
-	MUSIC_DIR: process.env.MUSIC_DIR || './music'
+	MUSIC_DIR: process.env.MUSIC_DIR || './music',
+	TEMP_DIR: getTempDir()
 };
