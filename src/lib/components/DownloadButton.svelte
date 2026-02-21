@@ -43,7 +43,7 @@
 		<button
 			onclick={handleDownloadClick}
 			disabled={downloading}
-			class="flex items-center gap-1.5 rounded-l-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+			class="flex cursor-pointer items-center gap-1.5 rounded-l-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
 		>
 			{#if downloading}
 				<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -73,7 +73,7 @@
 		<button
 			onclick={toggleDropdown}
 			disabled={downloading}
-			class="rounded-r-lg border-l border-green-700 bg-green-600 px-1.5 py-1.5 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+			class="cursor-pointer rounded-r-lg border-l border-green-700 bg-green-600 px-1.5 py-1.5 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
 			aria-label="Select quality"
 		>
 			<svg

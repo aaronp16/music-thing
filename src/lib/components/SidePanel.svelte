@@ -466,18 +466,27 @@
 				<!-- Download items -->
 				<div class="min-h-0 flex-1 space-y-2 overflow-y-auto">
 					{#each $downloadItems as item (item.id)}
-						<div class="rounded-lg bg-neutral-800 p-3">
+						<div 
+							class="rounded-lg p-3 transition-colors {item.status === 'pending' ? 'bg-neutral-800/50' : 'bg-neutral-800'}"
+						>
 							<div class="mb-1 flex items-center justify-between">
 								<div class="min-w-0 flex-1">
-									<div class="truncate text-sm font-medium text-white">
+									<div class="truncate text-sm font-medium {item.status === 'pending' ? 'text-neutral-400' : 'text-white'}">
 										{item.trackTitle}
 									</div>
-									<div class="truncate text-xs text-neutral-400">
+									<div class="truncate text-xs {item.status === 'pending' ? 'text-neutral-600' : 'text-neutral-400'}">
 										{item.artistName} - {item.albumTitle}
 									</div>
 								</div>
-								<div class="ml-3 flex-shrink-0 text-xs text-neutral-400">
-									{getStatusText(item)}
+								<div class="ml-3 flex-shrink-0 flex items-center gap-2">
+									{#if item.status === 'pending'}
+										<span class="rounded bg-neutral-700 px-1.5 py-0.5 text-[10px] text-neutral-400">
+											Pending
+										</span>
+									{/if}
+									<span class="text-xs {item.status === 'pending' ? 'text-neutral-600' : 'text-neutral-400'}">
+										{getStatusText(item)}
+									</span>
 								</div>
 							</div>
 

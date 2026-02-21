@@ -10,6 +10,12 @@ import { DEFAULT_QUALITY, type Quality } from '$lib/types';
 // Types
 // =============================================================================
 
+export interface PendingTrack {
+	id: number;
+	title: string;
+	trackNumber: number;
+}
+
 export interface DownloadItem {
 	id: string;
 	jobId: string;
@@ -64,16 +70,36 @@ function createDownloadsStore() {
 				throw new Error(error.error || 'Failed to start download');
 			}
 
-			const { jobId } = await response.json();
+			const { jobId, pendingTracks, albumTitle, artistName } = await response.json();
 
 			// Create job entry
 			const job: DownloadJob = {
 				jobId,
 				type,
 				albumId: type === 'album' ? id : undefined,
+				albumTitle,
 				items: new Map(),
 				startedAt: Date.now()
 			};
+
+			// For albums, pre-populate all tracks as pending
+			if (type === 'album' && pendingTracks && pendingTracks.length > 0) {
+				for (const t of pendingTracks) {
+					const pendingItem: DownloadItem = {
+						id: `${jobId}-${t.id}`,
+						jobId,
+						trackId: t.id,
+						trackTitle: t.title,
+						artistName: artistName || 'Unknown',
+						albumTitle: albumTitle || 'Unknown',
+						status: 'pending',
+						progress: 0,
+						bytesDownloaded: 0,
+						totalBytes: 0
+					};
+					job.items.set(t.id, pendingItem);
+				}
+			}
 
 			update((jobs) => {
 				jobs.set(jobId, job);
@@ -186,8 +212,13 @@ export const downloadItems = derived(downloads, ($downloads) => {
 			items.push(item);
 		}
 	}
-	// Sort by most recent first
+	// Sort: downloading first, then pending, then by most recent
 	return items.sort((a, b) => {
+		const statusOrder = { downloading: 0, pending: 1, error: 2, skipped: 3, complete: 4 };
+		const statusA = statusOrder[a.status];
+		const statusB = statusOrder[b.status];
+		if (statusA !== statusB) return statusA - statusB;
+		
 		const jobA = $downloads.get(a.jobId);
 		const jobB = $downloads.get(b.jobId);
 		return (jobB?.startedAt || 0) - (jobA?.startedAt || 0);
