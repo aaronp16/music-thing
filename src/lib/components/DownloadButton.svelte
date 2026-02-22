@@ -7,11 +7,13 @@
 		downloading?: boolean;
 		disabled?: boolean;
 		compact?: boolean;
+		size?: 'sm' | 'md';
 	}
 
-	let { onDownload, downloading = false, disabled = false, compact = false }: Props = $props();
+	let { onDownload, downloading = false, disabled = false, compact = false, size = 'md' }: Props = $props();
 	
 	const isDisabled = $derived(downloading || disabled);
+	const isSmall = $derived(size === 'sm' || compact);
 
 	let dropdownOpen = $state(false);
 
@@ -47,7 +49,7 @@
 		<button
 			onclick={handleDownloadClick}
 			disabled={isDisabled}
-			class="flex cursor-pointer items-center gap-1.5 rounded-l-lg bg-green-600 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 {compact ? 'px-2 py-1' : 'px-3 py-1.5'}"
+			class="flex cursor-pointer items-center gap-1.5 rounded-l-lg bg-green-600 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 {isSmall ? 'px-2 py-1' : 'px-3 py-1.5'}"
 		>
 			{#if downloading}
 				<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -69,7 +71,7 @@
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
 				</svg>
-				{#if !compact}
+				{#if !isSmall}
 					<span class="text-sm font-medium">{currentOption.label}</span>
 				{/if}
 			{/if}
@@ -79,7 +81,7 @@
 		<button
 			onclick={toggleDropdown}
 			disabled={isDisabled}
-			class="cursor-pointer rounded-r-lg border-l border-green-700 bg-green-600 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 {compact ? 'px-1 py-1' : 'px-1.5 py-1.5'}"
+			class="cursor-pointer rounded-r-lg border-l border-green-700 bg-green-600 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 {isSmall ? 'px-1 py-1' : 'px-1.5 py-1.5'}"
 			aria-label="Select quality"
 		>
 			<svg

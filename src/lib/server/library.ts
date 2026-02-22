@@ -35,6 +35,7 @@ export interface LibraryArtist {
 	name: string;
 	path: string;
 	albums: LibraryAlbum[];
+	hasArtistImage: boolean;
 }
 
 export interface Library {
@@ -159,7 +160,8 @@ export async function scanLibrary(): Promise<Library> {
 		const artist: LibraryArtist = {
 			name: artistName,
 			path: artistPath,
-			albums: []
+			albums: [],
+			hasArtistImage: await fileExists(join(artistPath, 'artist.jpg'))
 		};
 
 		// Read album directories

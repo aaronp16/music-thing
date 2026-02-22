@@ -6,7 +6,7 @@ import { createWriteStream } from 'fs';
 import { mkdir, access, constants, unlink, copyFile, readdir } from 'fs/promises';
 import path from 'path';
 import { env } from './env';
-import { getStreamUrlWithFallback, getCoverUrl, getAlbum, type Track, type Album, type AlbumWithTracks, type Quality as HifiQuality } from './hifi-client';
+import { getStreamUrlWithFallback, getCoverUrl, getArtistImageUrl, getAlbum, getArtistInfo, type Track, type Album, type AlbumWithTracks, type Quality as HifiQuality } from './hifi-client';
 import { embedMetadata, extractMetadata } from './metadata';
 import { QUALITY_OPTIONS, DEFAULT_QUALITY, type Quality } from '$lib/types';
 
@@ -101,6 +101,14 @@ function getAlbumPath(track: Track): string {
 	
 	// For multi-disk albums, put cover in the main album folder
 	return path.join(env.MUSIC_DIR, artistName, albumTitle);
+}
+
+/**
+ * Get artist folder path (for artist image)
+ */
+function getArtistPath(track: Track): string {
+	const artistName = sanitize(track.artist?.name || track.artists?.[0]?.name || 'Unknown Artist');
+	return path.join(env.MUSIC_DIR, artistName);
 }
 
 /**
@@ -397,6 +405,67 @@ async function downloadCoverArt(track: Track): Promise<void> {
 	}
 }
 
+/**
+ * Download artist image (artist.jpg) to the artist folder
+ * Fetches artist info from the API to get the picture UUID
+ */
+async function downloadArtistImage(track: Track): Promise<void> {
+	const artistPath = getArtistPath(track);
+	const artistImagePath = path.join(artistPath, 'artist.jpg');
+	
+	// Skip if already exists
+	if (await fileExists(artistImagePath)) {
+		return;
+	}
+	
+	// Get artist ID
+	const artistId = track.artist?.id || track.artists?.[0]?.id;
+	if (!artistId) return;
+	
+	// Generate a unique temp file name for artist image
+	const tempArtistImagePath = env.TEMP_DIR 
+		? path.join(env.TEMP_DIR, `artist-${artistId}.jpg`)
+		: null;
+	
+	try {
+		// Fetch artist info to get the picture UUID
+		const artistInfo = await getArtistInfo(artistId);
+		const pictureUuid = artistInfo.artist?.picture;
+		if (!pictureUuid) return;
+		
+		const artistImageUrl = getArtistImageUrl(pictureUuid, 750);
+		const response = await fetch(artistImageUrl);
+		
+		if (!response.ok) return;
+		
+		// Determine download path (temp or final)
+		const downloadPath = tempArtistImagePath || artistImagePath;
+		
+		// Create directory for download destination
+		await mkdir(path.dirname(downloadPath), { recursive: true });
+		
+		const buffer = await response.arrayBuffer();
+		const writer = createWriteStream(downloadPath);
+		writer.write(Buffer.from(buffer));
+		writer.end();
+		
+		await new Promise<void>((resolve, reject) => {
+			writer.on('finish', resolve);
+			writer.on('error', reject);
+		});
+		
+		// If using temp downloads, move to final destination
+		if (tempArtistImagePath) {
+			await mkdir(artistPath, { recursive: true });
+			await moveFile(tempArtistImagePath, artistImagePath);
+		}
+	} catch {
+		// Clean up temp file on error
+		await cleanupTempFile(tempArtistImagePath);
+		// Ignore artist image errors
+	}
+}
+
 // =============================================================================
 // Public API
 // =============================================================================
@@ -420,8 +489,9 @@ export async function startTrackDownload(track: Track, quality: Quality = DEFAUL
 	// Start download in background
 	(async () => {
 		try {
-			// Download cover art first
+			// Download cover art and artist image first
 			await downloadCoverArt(track);
+			await downloadArtistImage(track);
 			
 			// Download track (no totalTracks for single track downloads)
 			await downloadTrack(track, jobId, (progress) => {
@@ -496,9 +566,10 @@ export async function startAlbumDownload(
 	// Start downloads in background (sequential)
 	(async () => {
 		try {
-			// Download cover art first
+			// Download cover art and artist image first
 			if (enrichedTracks.length > 0) {
 				await downloadCoverArt(enrichedTracks[0]);
+				await downloadArtistImage(enrichedTracks[0]);
 			}
 			
 			// Download tracks one by one

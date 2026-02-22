@@ -653,6 +653,15 @@ export function getCoverUrl(coverUuid: string, size: 80 | 640 | 1280 = 1280): st
 	return `https://resources.tidal.com/images/${path}/${size}x${size}.jpg`;
 }
 
+/**
+ * Construct artist image URL from picture UUID
+ * Note: Tidal artist images only support specific sizes: 160, 320, 480, 750
+ */
+export function getArtistImageUrl(pictureUuid: string, size: 160 | 320 | 480 | 750 = 480): string {
+	const path = pictureUuid.replace(/-/g, '/');
+	return `https://resources.tidal.com/images/${path}/${size}x${size}.jpg`;
+}
+
 // =============================================================================
 // Exports
 // =============================================================================
@@ -672,6 +681,7 @@ export const hifiApi = {
 	getStreamResponse,
 	getCoverUrls,
 	getCoverUrl,
+	getArtistImageUrl,
 	getCurrentProvider,
 	getProviderStatus,
 	QualityNotAvailableError

@@ -26,8 +26,6 @@
 	}
 	
 	// Check if track is in library (reactive)
-	// Key format: artist|album|disk|trackname
-	// For single-disk albums, disk is 0. For multi-disk, use volumeNumber.
 	const inLibrary = $derived.by(() => {
 		const albumVolumes = track.album.numberOfVolumes || 1;
 		const diskNum = albumVolumes > 1 ? (track.volumeNumber || 1) : 0;
@@ -42,7 +40,6 @@
 	function handleArtistClick(e: Event) {
 		e.stopPropagation();
 		if (onArtistClick) {
-			// Use primary artist for navigation
 			const artist = track.artist;
 			onArtistClick(artist.id, artist.name);
 		}
@@ -56,11 +53,9 @@
 	}
 </script>
 
-<div
-	class="flex gap-4 rounded-lg bg-neutral-800 p-3 transition-colors hover:bg-neutral-750"
->
+<div class="group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-neutral-800/70">
 	<!-- Cover Art -->
-	<div class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-neutral-700">
+	<div class="h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-neutral-800">
 		{#if coverUrl}
 			<img src={coverUrl} alt={track.album.title} class="h-full w-full object-cover" />
 		{/if}
@@ -71,46 +66,46 @@
 		<div class="flex items-center gap-2">
 			<span class="truncate font-medium text-white">{track.title}</span>
 			{#if track.explicit}
-				<span
-					class="flex-shrink-0 rounded bg-neutral-600 px-1.5 py-0.5 text-xs font-medium text-neutral-300"
-					>E</span
-				>
+				<span class="flex-shrink-0 rounded bg-neutral-700 px-1 py-0.5 text-[10px] font-medium text-neutral-400">E</span>
 			{/if}
 			{#if inLibrary}
-				<span class="flex-shrink-0 rounded bg-green-900 px-1.5 py-0.5 text-xs font-medium text-green-300">
-					In Library
-				</span>
+				<svg class="h-4 w-4 flex-shrink-0 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+					<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+				</svg>
 			{/if}
 		</div>
-		{#if onArtistClick}
-			<button
-				type="button"
-				onclick={handleArtistClick}
-				class="truncate text-left text-sm text-neutral-400 transition-colors hover:text-blue-400 hover:underline"
-			>
-				{artistName}
-			</button>
-		{:else}
-			<span class="truncate text-sm text-neutral-400">{artistName}</span>
-		{/if}
-		<div class="flex items-center gap-1 text-sm text-neutral-500">
+		<div class="flex items-center gap-1 text-sm text-neutral-400">
+			{#if onArtistClick}
+				<button
+					type="button"
+					onclick={handleArtistClick}
+					class="truncate hover:text-white hover:underline"
+				>
+					{artistName}
+				</button>
+			{:else}
+				<span class="truncate">{artistName}</span>
+			{/if}
+			<span class="flex-shrink-0 text-neutral-600">&middot;</span>
 			{#if onAlbumClick}
 				<button
 					type="button"
 					onclick={handleAlbumClick}
-					class="truncate text-left transition-colors hover:text-blue-400 hover:underline"
+					class="truncate hover:text-white hover:underline"
 				>
 					{track.album.title}
 				</button>
 			{:else}
 				<span class="truncate">{track.album.title}</span>
 			{/if}
-			<span class="flex-shrink-0">&middot; {duration}</span>
 		</div>
 	</div>
 
+	<!-- Duration -->
+	<span class="flex-shrink-0 text-sm text-neutral-500">{duration}</span>
+
 	<!-- Download Button -->
-	<div class="flex items-center">
-		<DownloadButton onDownload={handleDownload} {downloading} />
+	<div class="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
+		<DownloadButton onDownload={handleDownload} {downloading} size="sm" />
 	</div>
 </div>

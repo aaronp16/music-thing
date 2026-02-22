@@ -26,10 +26,10 @@
 <button
 	type="button"
 	onclick={handleClick}
-	class="group flex w-full items-center gap-4 rounded-lg bg-neutral-800 p-3 text-left transition-colors hover:bg-neutral-750"
+	class="group flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-neutral-800/70"
 >
 	<!-- Artist Photo -->
-	<div class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-full bg-neutral-700">
+	<div class="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full bg-neutral-800">
 		{#if artist.picture}
 			<img
 				src={getArtistPicture(artist.picture)}
@@ -38,7 +38,7 @@
 			/>
 		{:else}
 			<div class="flex h-full w-full items-center justify-center">
-				<svg class="h-8 w-8 text-neutral-600" fill="currentColor" viewBox="0 0 24 24">
+				<svg class="h-6 w-6 text-neutral-600" fill="currentColor" viewBox="0 0 24 24">
 					<path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
 				</svg>
 			</div>
@@ -52,9 +52,12 @@
 	</div>
 
 	<!-- Arrow indicator -->
-	<div class="flex-shrink-0 text-neutral-600 transition-colors group-hover:text-neutral-400">
-		<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-		</svg>
-	</div>
+	<svg
+		class="h-4 w-4 flex-shrink-0 text-neutral-600 transition-colors group-hover:text-neutral-400"
+		fill="none"
+		stroke="currentColor"
+		viewBox="0 0 24 24"
+	>
+		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+	</svg>
 </button>

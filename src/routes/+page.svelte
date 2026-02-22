@@ -176,23 +176,33 @@
 				>
 					{#if $currentView.type === 'search'}
 						<!-- Search view -->
-						<div class="flex flex-1 flex-col overflow-hidden p-4">
-							<SearchBar 
-								onSearch={handleSearch} 
-								{loading} 
-								placeholder={data.placeholder}
-								initialQuery={searchQuery}
-								initialType={searchType}
-							/>
+						<div class="flex flex-1 flex-col overflow-hidden">
+							<!-- Header -->
+							<div class="px-6 py-8 animate-fade-in">
+								<h1 class="mb-6 text-4xl font-bold text-white">Search</h1>
+								<SearchBar 
+									onSearch={handleSearch} 
+									{loading} 
+									placeholder={data.placeholder}
+									initialQuery={searchQuery}
+									initialType={searchType}
+								/>
+							</div>
 
-							<div class="mt-4 min-h-0 flex-1 overflow-y-auto">
+							<!-- Results area -->
+							<div class="min-h-0 flex-1 overflow-y-auto px-6 pb-8">
 								{#if error}
-									<div class="rounded-lg bg-red-900/50 p-4 text-red-200">
-										{error}
+									<div class="flex flex-col items-center justify-center py-12 text-center">
+										<div class="mb-4 rounded-full bg-red-900/30 p-4">
+											<svg class="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+											</svg>
+										</div>
+										<p class="text-lg font-medium text-red-400">{error}</p>
 									</div>
 								{:else if loading}
-									<div class="flex items-center justify-center py-8">
-										<svg class="h-8 w-8 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
+									<div class="flex flex-col items-center justify-center py-16">
+										<svg class="h-10 w-10 animate-spin text-neutral-500" viewBox="0 0 24 24" fill="none">
 											<circle
 												class="opacity-25"
 												cx="12"
@@ -207,22 +217,27 @@
 												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
 											></path>
 										</svg>
+										<p class="mt-4 text-neutral-500">Searching...</p>
 									</div>
 								{:else if hasSearched}
-								<ResultsGrid
-									{tracks}
-									{albums}
-									{artists}
-									type={searchType}
-									onDownloadTrack={handleDownloadTrack}
-									onDownloadAlbum={handleDownloadAlbum}
-									downloadingIds={downloadingIds}
-									onArtistClick={handleArtistClick}
-									onAlbumClick={handleAlbumClick}
-								/>
+									<ResultsGrid
+										{tracks}
+										{albums}
+										{artists}
+										type={searchType}
+										onDownloadTrack={handleDownloadTrack}
+										onDownloadAlbum={handleDownloadAlbum}
+										downloadingIds={downloadingIds}
+										onArtistClick={handleArtistClick}
+										onAlbumClick={handleAlbumClick}
+									/>
 								{:else}
-									<div class="py-8 text-center text-neutral-500">
-										Search for tracks, albums, or artists to get started
+									<div class="flex flex-col items-center justify-center py-16 text-center">
+										<svg class="mb-4 h-20 w-20 text-neutral-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+										</svg>
+										<p class="text-lg font-medium text-neutral-400">Find your music</p>
+										<p class="mt-1 text-sm text-neutral-500">Search for tracks, albums, or artists</p>
 									</div>
 								{/if}
 							</div>

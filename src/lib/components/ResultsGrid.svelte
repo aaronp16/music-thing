@@ -36,6 +36,18 @@
 		artists.length === 0
 	);
 
+	const resultCount = $derived(
+		type === 'tracks' ? tracks.length : 
+		type === 'albums' ? albums.length : 
+		artists.length
+	);
+
+	const typeLabel = $derived(
+		type === 'tracks' ? 'Tracks' : 
+		type === 'albums' ? 'Albums' : 
+		'Artists'
+	);
+
 	// Stagger delay per item, capped at 15 items to avoid too long delays
 	function getStaggerDelay(index: number): string {
 		const delay = Math.min(index, 15) * 30;
@@ -43,43 +55,58 @@
 	}
 </script>
 
-<div class="flex flex-col gap-2">
+<div class="flex flex-col gap-4">
 	{#if isEmpty}
-		<div class="py-8 text-center text-neutral-500">
-			No results found. Try a different search.
+		<div class="flex flex-col items-center justify-center py-16 text-center">
+			<svg class="mb-4 h-16 w-16 text-neutral-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+			</svg>
+			<p class="text-lg font-medium text-neutral-400">No results found</p>
+			<p class="mt-1 text-sm text-neutral-500">Try a different search term</p>
 		</div>
-	{:else if type === 'tracks'}
-		{#each tracks as track, i (track.id)}
-			<div class="animate-fade-in" style="animation-delay: {getStaggerDelay(i)}">
-				<TrackCard
-					{track}
-					onDownload={onDownloadTrack}
-					downloading={downloadingIds.has(track.id)}
-					{onArtistClick}
-					{onAlbumClick}
-				/>
-			</div>
-		{/each}
-	{:else if type === 'albums'}
-		{#each albums as album, i (album.id)}
-			<div class="animate-fade-in" style="animation-delay: {getStaggerDelay(i)}">
-				<AlbumCard
-					{album}
-					{onArtistClick}
-					{onAlbumClick}
-					onDownload={onDownloadAlbum}
-					downloading={downloadingIds.has(album.id)}
-				/>
-			</div>
-		{/each}
-	{:else if type === 'artists'}
-		{#each artists as artist, i (artist.id)}
-			<div class="animate-fade-in" style="animation-delay: {getStaggerDelay(i)}">
-				<ArtistCard
-					{artist}
-					{onArtistClick}
-				/>
-			</div>
-		{/each}
+	{:else}
+		<!-- Results header -->
+		<div class="flex items-center justify-between animate-fade-in">
+			<h2 class="text-lg font-semibold text-white">{typeLabel}</h2>
+			<span class="text-sm text-neutral-500">{resultCount} results</span>
+		</div>
+
+		<!-- Results list -->
+		<div class="flex flex-col gap-1.5">
+			{#if type === 'tracks'}
+				{#each tracks as track, i (track.id)}
+					<div class="animate-fade-in" style="animation-delay: {getStaggerDelay(i)}">
+						<TrackCard
+							{track}
+							onDownload={onDownloadTrack}
+							downloading={downloadingIds.has(track.id)}
+							{onArtistClick}
+							{onAlbumClick}
+						/>
+					</div>
+				{/each}
+			{:else if type === 'albums'}
+				{#each albums as album, i (album.id)}
+					<div class="animate-fade-in" style="animation-delay: {getStaggerDelay(i)}">
+						<AlbumCard
+							{album}
+							{onArtistClick}
+							{onAlbumClick}
+							onDownload={onDownloadAlbum}
+							downloading={downloadingIds.has(album.id)}
+						/>
+					</div>
+				{/each}
+			{:else if type === 'artists'}
+				{#each artists as artist, i (artist.id)}
+					<div class="animate-fade-in" style="animation-delay: {getStaggerDelay(i)}">
+						<ArtistCard
+							{artist}
+							{onArtistClick}
+						/>
+					</div>
+				{/each}
+			{/if}
+		</div>
 	{/if}
 </div>

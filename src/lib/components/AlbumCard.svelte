@@ -18,7 +18,6 @@
 	const libraryState = $derived($libraryIndex);
 
 	const coverUrl = $derived(getCoverUrl(album.cover, 640));
-	const duration = $derived(album.duration ? formatDuration(album.duration) : null);
 	const artistName = $derived(album.artists?.map((a) => a.name).join(', ') || album.artist?.name || 'Unknown Artist');
 	const year = $derived(album.releaseDate ? new Date(album.releaseDate).getFullYear() : null);
 	
@@ -84,12 +83,23 @@
 	tabindex="0"
 	onclick={handleClick}
 	onkeydown={handleKeydown}
-	class="flex w-full cursor-pointer items-center gap-4 rounded-lg bg-neutral-800 p-3 text-left transition-colors hover:bg-neutral-750"
+	class="group flex cursor-pointer items-center gap-3 rounded-lg p-2 transition-colors hover:bg-neutral-800/70"
 >
 	<!-- Cover Art -->
-	<div class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-neutral-700">
+	<div class="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-neutral-800">
 		{#if coverUrl}
 			<img src={coverUrl} alt={album.title} class="h-full w-full object-cover" />
+		{/if}
+		{#if albumLibraryStatus.complete}
+			<div class="absolute inset-0 flex items-center justify-center bg-black/40">
+				<svg class="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+					<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+				</svg>
+			</div>
+		{:else if albumLibraryStatus.inLibrary > 0}
+			<div class="absolute bottom-0 right-0 rounded-tl bg-green-600/90 px-1 py-0.5 text-[9px] font-bold text-white">
+				{albumLibraryStatus.inLibrary}/{albumLibraryStatus.total}
+			</div>
 		{/if}
 	</div>
 
@@ -98,55 +108,46 @@
 		<div class="flex items-center gap-2">
 			<span class="truncate font-medium text-white">{album.title}</span>
 			{#if album.explicit}
-				<span class="flex-shrink-0 rounded bg-neutral-600 px-1.5 py-0.5 text-xs font-medium text-neutral-300">E</span>
-			{/if}
-			{#if albumLibraryStatus.complete}
-				<span class="flex-shrink-0 rounded bg-green-900 px-1.5 py-0.5 text-xs font-medium text-green-300">
-					In Library
-				</span>
-			{:else if albumLibraryStatus.inLibrary > 0}
-				<span class="flex-shrink-0 rounded bg-green-900/50 px-1.5 py-0.5 text-xs font-medium text-green-400">
-					{albumLibraryStatus.inLibrary}/{albumLibraryStatus.total}
-				</span>
+				<span class="flex-shrink-0 rounded bg-neutral-700 px-1 py-0.5 text-[10px] font-medium text-neutral-400">E</span>
 			{/if}
 		</div>
-		{#if onArtistClick}
-			<button
-				type="button"
-				onclick={handleArtistClick}
-				class="truncate text-left text-sm text-neutral-400 transition-colors hover:text-blue-400 hover:underline"
-			>
-				{artistName}
-			</button>
-		{:else}
-			<span class="truncate text-sm text-neutral-400">{artistName}</span>
-		{/if}
-		<div class="flex items-center gap-2 text-sm text-neutral-500">
-			{#if album.numberOfTracks}
-				<span>{album.numberOfTracks} tracks</span>
+		<div class="flex items-center gap-1 text-sm text-neutral-400">
+			{#if onArtistClick}
+				<button
+					type="button"
+					onclick={handleArtistClick}
+					class="truncate hover:text-white hover:underline"
+				>
+					{artistName}
+				</button>
+			{:else}
+				<span class="truncate">{artistName}</span>
 			{/if}
 			{#if year}
-				<span>&middot; {year}</span>
+				<span class="flex-shrink-0 text-neutral-600">&middot;</span>
+				<span class="flex-shrink-0">{year}</span>
 			{/if}
-			{#if duration}
-				<span>&middot; {duration}</span>
+			{#if album.numberOfTracks}
+				<span class="flex-shrink-0 text-neutral-600">&middot;</span>
+				<span class="flex-shrink-0">{album.numberOfTracks} tracks</span>
 			{/if}
 		</div>
 	</div>
 
 	<!-- Download Button or Arrow -->
 	{#if onDownload}
-		<div class="flex items-center" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
-			<DownloadButton onDownload={handleDownload} {downloading} />
+		<div class="flex items-center opacity-0 transition-opacity group-hover:opacity-100" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+			<DownloadButton onDownload={handleDownload} {downloading} size="sm" />
 		</div>
-	{:else}
-		<svg
-			class="h-5 w-5 flex-shrink-0 text-neutral-500"
-			fill="none"
-			stroke="currentColor"
-			viewBox="0 0 24 24"
-		>
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-		</svg>
 	{/if}
+	
+	<!-- Arrow indicator (always visible) -->
+	<svg
+		class="h-4 w-4 flex-shrink-0 text-neutral-600 transition-colors group-hover:text-neutral-400"
+		fill="none"
+		stroke="currentColor"
+		viewBox="0 0 24 24"
+	>
+		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+	</svg>
 </div>

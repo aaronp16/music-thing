@@ -12,7 +12,7 @@
 	let { 
 		onSearch, 
 		loading = false, 
-		placeholder = 'Search for music...',
+		placeholder = 'What do you want to listen to?',
 		initialQuery = '',
 		initialType = 'tracks'
 	}: Props = $props();
@@ -60,23 +60,12 @@
 </script>
 
 <div class="w-full">
-	<form onsubmit={handleSubmit} class="flex flex-col gap-3">
-		<div class="flex gap-2">
-			<input
-				type="text"
-				bind:value={query}
-				onkeydown={handleKeydown}
-				placeholder={placeholder}
-				class="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-white placeholder-neutral-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-				disabled={loading}
-			/>
-			<button
-				type="submit"
-				disabled={loading || !query.trim()}
-				class="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-			>
+	<form onsubmit={handleSubmit} class="flex flex-col gap-4">
+		<!-- Search input with icon -->
+		<div class="relative">
+			<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
 				{#if loading}
-					<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+					<svg class="h-5 w-5 animate-spin text-neutral-400" viewBox="0 0 24 24" fill="none">
 						<circle
 							class="opacity-25"
 							cx="12"
@@ -92,45 +81,50 @@
 						></path>
 					</svg>
 				{:else}
-					Search
+					<svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+					</svg>
 				{/if}
-			</button>
+			</div>
+			<input
+				type="text"
+				bind:value={query}
+				onkeydown={handleKeydown}
+				placeholder={placeholder}
+				class="w-full rounded-full border-0 bg-neutral-800 py-3 pl-12 pr-4 text-white placeholder-neutral-500 ring-1 ring-neutral-700 transition-all focus:bg-neutral-750 focus:outline-none focus:ring-2 focus:ring-blue-500"
+				disabled={loading}
+			/>
 		</div>
 
-		<div class="flex gap-4">
-			<label class="flex cursor-pointer items-center gap-2">
-				<input
-					type="radio"
-					name="searchType"
-					value="tracks"
-					checked={searchType === 'tracks'}
-					onchange={() => handleTypeChange('tracks')}
-					class="h-4 w-4 accent-blue-600"
-				/>
-				<span class="text-sm text-neutral-300">Tracks</span>
-			</label>
-			<label class="flex cursor-pointer items-center gap-2">
-				<input
-					type="radio"
-					name="searchType"
-					value="albums"
-					checked={searchType === 'albums'}
-					onchange={() => handleTypeChange('albums')}
-					class="h-4 w-4 accent-blue-600"
-				/>
-				<span class="text-sm text-neutral-300">Albums</span>
-			</label>
-			<label class="flex cursor-pointer items-center gap-2">
-				<input
-					type="radio"
-					name="searchType"
-					value="artists"
-					checked={searchType === 'artists'}
-					onchange={() => handleTypeChange('artists')}
-					class="h-4 w-4 accent-blue-600"
-				/>
-				<span class="text-sm text-neutral-300">Artists</span>
-			</label>
+		<!-- Type selector pills -->
+		<div class="flex gap-2">
+			<button
+				type="button"
+				onclick={() => handleTypeChange('tracks')}
+				class="rounded-full px-4 py-1.5 text-sm font-medium transition-all {searchType === 'tracks' 
+					? 'bg-white text-black' 
+					: 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white'}"
+			>
+				Tracks
+			</button>
+			<button
+				type="button"
+				onclick={() => handleTypeChange('albums')}
+				class="rounded-full px-4 py-1.5 text-sm font-medium transition-all {searchType === 'albums' 
+					? 'bg-white text-black' 
+					: 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white'}"
+			>
+				Albums
+			</button>
+			<button
+				type="button"
+				onclick={() => handleTypeChange('artists')}
+				class="rounded-full px-4 py-1.5 text-sm font-medium transition-all {searchType === 'artists' 
+					? 'bg-white text-black' 
+					: 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white'}"
+			>
+				Artists
+			</button>
 		</div>
 	</form>
 </div>
