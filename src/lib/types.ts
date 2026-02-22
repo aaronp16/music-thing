@@ -6,6 +6,19 @@ export interface Artist {
 	id: number;
 	name: string;
 	picture?: string;
+	popularity?: number;
+	type?: 'MAIN' | 'FEATURED';
+}
+
+/**
+ * Full artist data from /api/artist endpoint
+ */
+export interface ArtistPageData {
+	artist: Artist;
+	cover?: { '750': string };
+	albums: Album[];
+	topTracks: Track[];
+	similarArtists: Artist[];
 }
 
 export interface Album {
@@ -16,6 +29,8 @@ export interface Album {
 	numberOfVolumes?: number;
 	duration?: number;
 	releaseDate?: string;
+	type?: 'ALBUM' | 'SINGLE';
+	explicit?: boolean;
 	artist?: Artist;
 	artists?: Artist[];
 }

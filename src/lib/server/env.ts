@@ -7,8 +7,7 @@
  */
 export const DEFAULT_API_PROVIDERS = [
 	'https://triton.squid.wtf',
-	'https://api.monochrome.tf',
-	'https://wolf.qqdl.site'
+	'https://api.monochrome.tf'
 ];
 
 /**

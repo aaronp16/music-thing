@@ -1,16 +1,49 @@
 <script lang="ts">
-	type SearchType = 'tracks' | 'albums';
+	type SearchType = 'tracks' | 'albums' | 'artists';
 
 	interface Props {
 		onSearch: (query: string, type: SearchType) => void;
 		loading?: boolean;
 		placeholder?: string;
+		initialQuery?: string;
+		initialType?: SearchType;
 	}
 
-	let { onSearch, loading = false, placeholder = 'Search for music...' }: Props = $props();
+	let { 
+		onSearch, 
+		loading = false, 
+		placeholder = 'Search for music...',
+		initialQuery = '',
+		initialType = 'tracks'
+	}: Props = $props();
 
-	let query = $state('');
-	let searchType: SearchType = $state('tracks');
+	let query = $state(initialQuery);
+	let searchType: SearchType = $state(initialType);
+	
+	// Track if this is the initial mount to avoid triggering search on load
+	let hasInteracted = $state(false);
+
+	// Update state when initial values change (e.g., from URL)
+	$effect(() => {
+		if (initialQuery !== undefined) {
+			query = initialQuery;
+		}
+	});
+
+	$effect(() => {
+		if (initialType !== undefined) {
+			searchType = initialType;
+		}
+	});
+
+	// Re-run search when type changes (if there's a query)
+	function handleTypeChange(newType: SearchType) {
+		searchType = newType;
+		hasInteracted = true;
+		if (query.trim()) {
+			onSearch(query.trim(), newType);
+		}
+	}
 
 	function handleSubmit(e: Event) {
 		e.preventDefault();
@@ -70,7 +103,8 @@
 					type="radio"
 					name="searchType"
 					value="tracks"
-					bind:group={searchType}
+					checked={searchType === 'tracks'}
+					onchange={() => handleTypeChange('tracks')}
 					class="h-4 w-4 accent-blue-600"
 				/>
 				<span class="text-sm text-neutral-300">Tracks</span>
@@ -80,10 +114,22 @@
 					type="radio"
 					name="searchType"
 					value="albums"
-					bind:group={searchType}
+					checked={searchType === 'albums'}
+					onchange={() => handleTypeChange('albums')}
 					class="h-4 w-4 accent-blue-600"
 				/>
 				<span class="text-sm text-neutral-300">Albums</span>
+			</label>
+			<label class="flex cursor-pointer items-center gap-2">
+				<input
+					type="radio"
+					name="searchType"
+					value="artists"
+					checked={searchType === 'artists'}
+					onchange={() => handleTypeChange('artists')}
+					class="h-4 w-4 accent-blue-600"
+				/>
+				<span class="text-sm text-neutral-300">Artists</span>
 			</label>
 		</div>
 	</form>

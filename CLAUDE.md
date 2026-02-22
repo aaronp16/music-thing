@@ -57,7 +57,7 @@ hifi-api is a Python FastAPI proxy to Tidal's official API. Multiple public inst
 ```
 GET /search/?s={query}     # Search tracks
 GET /search/?al={query}    # Search albums
-GET /search/?ar={query}    # Search artists
+GET /search/?a={query}     # Search artists
 ```
 
 **Response (tracks):**

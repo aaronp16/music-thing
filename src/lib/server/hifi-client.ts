@@ -193,11 +193,16 @@ class HifiApiError extends Error {
 }
 
 /**
- * hifi-api wraps all responses in { version, data: T }
+ * hifi-api wraps most responses in { version, data: T }
+ * Some endpoints (like /artist/) return { version, ...T } directly
  */
 interface ApiResponse<T> {
 	version: string;
 	data: T;
+}
+
+interface ApiResponseRaw<T> {
+	version: string;
 }
 
 /**
@@ -273,6 +278,64 @@ async function apiRequest<T>(endpoint: string): Promise<T> {
 	throw lastError || new Error('All API providers failed');
 }
 
+/**
+ * Make API request that returns raw response (without unwrapping data)
+ * Used for endpoints like /artist/ that don't use the { data: T } wrapper
+ */
+async function apiRequestRaw<T>(endpoint: string): Promise<T> {
+	const providers = getProvidersByPriority();
+	let lastError: Error | null = null;
+
+	for (const baseUrl of providers) {
+		const url = `${baseUrl}${endpoint}`;
+
+		try {
+			const response = await fetch(url);
+
+			if (!response.ok) {
+				const error = new HifiApiError(
+					`API request failed: ${response.statusText}`,
+					response.status,
+					endpoint,
+					baseUrl
+				);
+
+				if (isRetryableError(response.status)) {
+					markProviderFailed(baseUrl);
+					lastError = error;
+					console.warn(`[hifi-client] ${baseUrl} returned ${response.status}, trying next provider...`);
+					continue;
+				}
+
+				throw error;
+			}
+
+			// Parse JSON response and return as-is (without unwrapping data)
+			const json = await response.json() as T & { version?: string };
+			markProviderSuccess(baseUrl);
+			return json;
+		} catch (error) {
+			if (error instanceof TypeError || (error instanceof Error && error.message.includes('fetch'))) {
+				markProviderFailed(baseUrl);
+				lastError = error as Error;
+				console.warn(`[hifi-client] ${baseUrl} network error, trying next provider...`);
+				continue;
+			}
+
+			if (error instanceof HifiApiError) {
+				throw error;
+			}
+
+			markProviderFailed(baseUrl);
+			lastError = error as Error;
+			console.warn(`[hifi-client] ${baseUrl} unknown error: ${error instanceof Error ? error.message : error}, trying next provider...`);
+			continue;
+		}
+	}
+
+	throw lastError || new Error('All API providers failed');
+}
+
 // =============================================================================
 // Search
 // =============================================================================
@@ -312,7 +375,7 @@ interface ArtistSearchResponse {
  * Search for artists
  */
 export async function searchArtists(query: string): Promise<SearchResult<Artist>> {
-	const response = await apiRequest<ArtistSearchResponse>(`/search/?ar=${encodeURIComponent(query)}`);
+	const response = await apiRequest<ArtistSearchResponse>(`/search/?a=${encodeURIComponent(query)}`);
 	return response.artists;
 }
 
@@ -465,6 +528,112 @@ export async function getStreamResponse(
 }
 
 // =============================================================================
+// Artist
+// =============================================================================
+
+/**
+ * Full artist info with discography
+ */
+export interface ArtistFull {
+	id: number;
+	name: string;
+	picture?: string;
+	popularity?: number;
+	url?: string;
+}
+
+/**
+ * Artist page response with albums and top tracks
+ */
+export interface ArtistPageResponse {
+	albums: { items: Album[] };
+	tracks: Track[];
+}
+
+/**
+ * Similar artist from the API
+ */
+export interface SimilarArtist {
+	id: number;
+	name: string;
+	picture?: string;
+	popularity?: number;
+}
+
+/**
+ * Get artist basic info (metadata + cover)
+ * Note: This endpoint doesn't use the { data: T } wrapper
+ */
+export async function getArtistInfo(artistId: number): Promise<{ artist: ArtistFull; cover?: { '750': string } }> {
+	return apiRequestRaw(`/artist/?id=${artistId}`);
+}
+
+/**
+ * Get artist discography with top tracks
+ * Note: This endpoint doesn't use the { data: T } wrapper
+ */
+export async function getArtistDiscography(artistId: number): Promise<ArtistPageResponse> {
+	return apiRequestRaw(`/artist/?f=${artistId}&skip_tracks=true`);
+}
+
+/**
+ * Get similar artists
+ * Note: This endpoint doesn't use the { data: T } wrapper
+ */
+export async function getSimilarArtists(artistId: number): Promise<{ artists: SimilarArtist[] }> {
+	return apiRequestRaw(`/artist/similar/?id=${artistId}`);
+}
+
+/**
+ * Get similar albums
+ * Note: This endpoint doesn't use the { data: T } wrapper
+ * Some providers return incomplete data, so we validate and try next provider if needed
+ */
+export async function getSimilarAlbums(albumId: number): Promise<{ albums: Album[] }> {
+	const providers = getProvidersByPriority();
+	let lastResult: { albums: Album[] } | null = null;
+	
+	for (const baseUrl of providers) {
+		const url = `${baseUrl}/album/similar/?id=${albumId}`;
+		
+		try {
+			const response = await fetch(url);
+			
+			if (!response.ok) {
+				if (isRetryableError(response.status)) {
+					markProviderFailed(baseUrl);
+					console.warn(`[hifi-client] ${baseUrl} returned ${response.status} for similar albums, trying next provider...`);
+					continue;
+				}
+				throw new HifiApiError(`API request failed: ${response.statusText}`, response.status, `/album/similar/?id=${albumId}`, baseUrl);
+			}
+			
+			const data = await response.json() as { albums: Album[] };
+			markProviderSuccess(baseUrl);
+			
+			// Validate we got a reasonable number of results
+			// If we only got 1-2 results, try next provider (some providers return incomplete data)
+			if (data.albums && data.albums.length > 3) {
+				return data;
+			}
+			
+			// Store result but try next provider for better data
+			if (!lastResult || (data.albums?.length || 0) > (lastResult.albums?.length || 0)) {
+				lastResult = data;
+			}
+			console.warn(`[hifi-client] ${baseUrl} returned only ${data.albums?.length || 0} similar albums, trying next provider...`);
+		} catch (error) {
+			if (error instanceof HifiApiError) throw error;
+			markProviderFailed(baseUrl);
+			console.warn(`[hifi-client] ${baseUrl} failed for similar albums: ${error instanceof Error ? error.message : error}`);
+		}
+	}
+	
+	// Return best result we found, or empty
+	return lastResult || { albums: [] };
+}
+
+// =============================================================================
 // Cover Art
 // =============================================================================
 
@@ -494,6 +663,10 @@ export const hifiApi = {
 	searchArtists,
 	getTrackInfo,
 	getAlbum,
+	getArtistInfo,
+	getArtistDiscography,
+	getSimilarArtists,
+	getSimilarAlbums,
 	getStreamUrl,
 	getStreamUrlWithFallback,
 	getStreamResponse,

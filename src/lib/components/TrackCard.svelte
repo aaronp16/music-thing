@@ -8,9 +8,11 @@
 		track: Track;
 		onDownload: (track: Track, quality: Quality) => void;
 		downloading?: boolean;
+		onArtistClick?: (artistId: number, artistName: string) => void;
+		onAlbumClick?: (albumId: number, albumTitle: string) => void;
 	}
 
-	let { track, onDownload, downloading = false }: Props = $props();
+	let { track, onDownload, downloading = false, onArtistClick, onAlbumClick }: Props = $props();
 
 	// Subscribe to library index for reactivity
 	const libraryState = $derived($libraryIndex);
@@ -35,6 +37,22 @@
 
 	function handleDownload(quality: Quality) {
 		onDownload(track, quality);
+	}
+
+	function handleArtistClick(e: Event) {
+		e.stopPropagation();
+		if (onArtistClick) {
+			// Use primary artist for navigation
+			const artist = track.artist;
+			onArtistClick(artist.id, artist.name);
+		}
+	}
+
+	function handleAlbumClick(e: Event) {
+		e.stopPropagation();
+		if (onAlbumClick) {
+			onAlbumClick(track.album.id, track.album.title);
+		}
 	}
 </script>
 
@@ -64,8 +82,31 @@
 				</span>
 			{/if}
 		</div>
-		<span class="truncate text-sm text-neutral-400">{artistName}</span>
-		<span class="truncate text-sm text-neutral-500">{track.album.title} &middot; {duration}</span>
+		{#if onArtistClick}
+			<button
+				type="button"
+				onclick={handleArtistClick}
+				class="truncate text-left text-sm text-neutral-400 transition-colors hover:text-blue-400 hover:underline"
+			>
+				{artistName}
+			</button>
+		{:else}
+			<span class="truncate text-sm text-neutral-400">{artistName}</span>
+		{/if}
+		<div class="flex items-center gap-1 text-sm text-neutral-500">
+			{#if onAlbumClick}
+				<button
+					type="button"
+					onclick={handleAlbumClick}
+					class="truncate text-left transition-colors hover:text-blue-400 hover:underline"
+				>
+					{track.album.title}
+				</button>
+			{:else}
+				<span class="truncate">{track.album.title}</span>
+			{/if}
+			<span class="flex-shrink-0">&middot; {duration}</span>
+		</div>
 	</div>
 
 	<!-- Download Button -->
