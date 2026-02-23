@@ -2,6 +2,8 @@
 	import './layout.css';
 	import Toast from '$lib/components/Toast.svelte';
 	import DiskSpace from '$lib/components/DiskSpace.svelte';
+	import DownloadsHeaderIndicator from '$lib/components/DownloadsHeaderIndicator.svelte';
+	import DownloadsModal from '$lib/components/DownloadsModal.svelte';
 
 	interface Props {
 		data: { slogan: string };
@@ -9,6 +11,16 @@
 	}
 
 	let { data, children }: Props = $props();
+
+	let isDownloadsModalOpen = $state(false);
+
+	function openDownloadsModal() {
+		isDownloadsModalOpen = true;
+	}
+
+	function closeDownloadsModal() {
+		isDownloadsModalOpen = false;
+	}
 </script>
 
 <svelte:head>
@@ -16,15 +28,6 @@
 </svelte:head>
 
 <div class="flex h-screen flex-col bg-neutral-900 text-white">
-	<!-- Header -->
-	<header class="flex h-14 flex-shrink-0 items-center justify-between border-b border-neutral-800 px-4">
-		<div class="flex items-center gap-3">
-			<h1 class="text-xl font-bold">Music Thing</h1>
-			<span class="text-sm text-neutral-500 italic">{data.slogan}</span>
-		</div>
-		<DiskSpace />
-	</header>
-
 	<!-- Main Content -->
 	<main class="flex min-h-0 flex-1">
 		{@render children()}
@@ -33,3 +36,6 @@
 
 <!-- Toast notifications -->
 <Toast />
+
+<!-- Downloads Modal -->
+<DownloadsModal isOpen={isDownloadsModalOpen} onClose={closeDownloadsModal} />

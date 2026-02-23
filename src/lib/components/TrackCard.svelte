@@ -20,15 +20,15 @@
 	const coverUrl = $derived(getCoverUrl(track.album.cover, 640));
 	const duration = $derived(formatDuration(track.duration));
 	const artistName = $derived(track.artists?.map((a) => a.name).join(', ') || track.artist.name);
-	
+
 	function sanitize(name: string): string {
 		return name.replace(/[<>:"/\\|?*]/g, '_').trim();
 	}
-	
+
 	// Check if track is in library (reactive)
 	const inLibrary = $derived.by(() => {
 		const albumVolumes = track.album.numberOfVolumes || 1;
-		const diskNum = albumVolumes > 1 ? (track.volumeNumber || 1) : 0;
+		const diskNum = albumVolumes > 1 ? track.volumeNumber || 1 : 0;
 		const key = `${sanitize(artistName).toLowerCase()}|${sanitize(track.album.title).toLowerCase()}|${diskNum}|${sanitize(track.title).toLowerCase()}`;
 		return libraryState.tracks.has(key);
 	});
@@ -66,7 +66,10 @@
 		<div class="flex items-center gap-2">
 			<span class="truncate font-medium text-white">{track.title}</span>
 			{#if track.explicit}
-				<span class="flex-shrink-0 rounded bg-neutral-700 px-1 py-0.5 text-[10px] font-medium text-neutral-400">E</span>
+				<span
+					class="flex-shrink-0 rounded bg-neutral-700 px-1 py-0.5 text-[10px] font-medium text-neutral-400"
+					>E</span
+				>
 			{/if}
 			{#if inLibrary}
 				<svg class="h-4 w-4 flex-shrink-0 text-green-500" fill="currentColor" viewBox="0 0 24 24">
@@ -105,7 +108,7 @@
 	<span class="flex-shrink-0 text-sm text-neutral-500">{duration}</span>
 
 	<!-- Download Button -->
-	<div class="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
+	<div class="flex items-center">
 		<DownloadButton onDownload={handleDownload} {downloading} size="sm" />
 	</div>
 </div>

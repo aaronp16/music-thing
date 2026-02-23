@@ -40,7 +40,7 @@ interface NavigationState {
 function parseUrl(url: URL): View {
 	const params = url.searchParams;
 	const view = params.get('view');
-	
+
 	if (view === 'artist') {
 		const id = params.get('id');
 		const name = params.get('name') || 'Artist';
@@ -52,7 +52,7 @@ function parseUrl(url: URL): View {
 			};
 		}
 	}
-	
+
 	if (view === 'album') {
 		const id = params.get('id');
 		const name = params.get('name') || 'Album';
@@ -64,11 +64,11 @@ function parseUrl(url: URL): View {
 			};
 		}
 	}
-	
+
 	// Default to search view
 	const query = params.get('q') || undefined;
 	const searchType = params.get('type') as 'tracks' | 'albums' | 'artists' | null;
-	
+
 	return {
 		type: 'search',
 		query,
@@ -81,7 +81,7 @@ function parseUrl(url: URL): View {
  */
 function buildUrl(view: View): string {
 	const params = new URLSearchParams();
-	
+
 	if (view.type === 'artist') {
 		params.set('view', 'artist');
 		params.set('id', view.artistId.toString());
@@ -99,7 +99,7 @@ function buildUrl(view: View): string {
 			params.set('type', view.searchType);
 		}
 	}
-	
+
 	const queryString = params.toString();
 	return queryString ? `?${queryString}` : '/';
 }
@@ -109,7 +109,7 @@ function buildUrl(view: View): string {
  */
 function viewsEqual(a: View, b: View): boolean {
 	if (a.type !== b.type) return false;
-	
+
 	if (a.type === 'artist' && b.type === 'artist') {
 		return a.artistId === b.artistId;
 	}
@@ -124,10 +124,8 @@ function viewsEqual(a: View, b: View): boolean {
 
 function createNavigation() {
 	// Initialize from URL if in browser
-	const initialView: View = browser 
-		? parseUrl(new URL(window.location.href))
-		: { type: 'search' };
-	
+	const initialView: View = browser ? parseUrl(new URL(window.location.href)) : { type: 'search' };
+
 	const { subscribe, set, update } = writable<NavigationState>({
 		current: initialView,
 		direction: 'forward',
@@ -143,11 +141,11 @@ function createNavigation() {
 			handlingPopState = true;
 			const view = parseUrl(new URL(window.location.href));
 			const currentState = get({ subscribe });
-			
+
 			// Determine direction based on whether we're going back or forward
 			// We can't easily know, so we'll just use 'back' for popstate
 			const direction = 'back';
-			
+
 			set({
 				current: view,
 				direction,
@@ -160,21 +158,27 @@ function createNavigation() {
 	/**
 	 * Navigate to a view and update the URL
 	 */
-	function navigateTo(view: View, options: { replace?: boolean; direction?: 'forward' | 'back' } = {}) {
-		const { replace = false, direction = 'forward' } = options;
+	function navigateTo(
+		view: View,
+		options: { replace?: boolean; direction?: 'forward' | 'back'; animate?: boolean } = {}
+	) {
+		const { replace = false, direction = 'forward', animate = true } = options;
 		const currentState = get({ subscribe });
-		
+
 		// Don't navigate if we're already at this view
 		if (viewsEqual(currentState.current, view)) {
 			return;
 		}
-		
+
+		// Determine if we should animate - only if view type is changing and animate is not explicitly false
+		const shouldAnimate = animate && currentState.current.type !== view.type;
+
 		set({
 			current: view,
 			direction,
-			hasNavigated: true
+			hasNavigated: shouldAnimate ? true : currentState.hasNavigated
 		});
-		
+
 		// Update URL if in browser and not handling popstate
 		if (browser && !handlingPopState) {
 			const url = buildUrl(view);
@@ -215,11 +219,14 @@ function createNavigation() {
 		 * Go back to search (or use browser history)
 		 */
 		goToSearch(query?: string, searchType?: 'tracks' | 'albums' | 'artists') {
-			navigateTo({
-				type: 'search',
-				query,
-				searchType
-			}, { direction: 'back' });
+			navigateTo(
+				{
+					type: 'search',
+					query,
+					searchType
+				},
+				{ direction: 'back' }
+			);
 		},
 
 		/**
@@ -227,7 +234,7 @@ function createNavigation() {
 		 */
 		updateSearch(query?: string, searchType?: 'tracks' | 'albums' | 'artists') {
 			const currentState = get({ subscribe });
-			
+
 			// Only update if we're in search view
 			if (currentState.current.type !== 'search') {
 				navigateTo({
@@ -237,13 +244,16 @@ function createNavigation() {
 				});
 				return;
 			}
-			
+
 			// Replace current entry to avoid cluttering history with every keystroke
-			navigateTo({
-				type: 'search',
-				query,
-				searchType
-			}, { replace: true });
+			navigateTo(
+				{
+					type: 'search',
+					query,
+					searchType
+				},
+				{ replace: true }
+			);
 		},
 
 		/**

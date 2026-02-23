@@ -59,53 +59,122 @@ function createDownloadsStore() {
 			quality: Quality = DEFAULT_QUALITY,
 			selectedTrackIds?: number[]
 		) => {
-			// Call download API
-			const response = await fetch('/api/download', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ type, id, track, quality, selectedTrackIds })
-			});
+			// Generate a temporary jobId for immediate UI feedback
+			const tempJobId = `temp-${Date.now()}-${Math.random()}`;
 
-			if (!response.ok) {
-				const error = await response.json();
-				throw new Error(error.error || 'Failed to start download');
-			}
-
-			const { jobId, pendingTracks, albumTitle, artistName } = await response.json();
-
-			// Create job entry
-			const job: DownloadJob = {
-				jobId,
+			// Create temporary job entry immediately for loading state
+			const tempJob: DownloadJob = {
+				jobId: tempJobId,
 				type,
 				albumId: type === 'album' ? id : undefined,
-				albumTitle,
+				albumTitle: track?.album.title,
 				items: new Map(),
 				startedAt: Date.now()
 			};
 
-			// For albums, pre-populate all tracks as pending
-			if (type === 'album' && pendingTracks && pendingTracks.length > 0) {
-				for (const t of pendingTracks) {
+			// For single track downloads, add a pending item immediately
+			if (type === 'track' && track) {
+				const pendingItem: DownloadItem = {
+					id: `${tempJobId}-${track.id}`,
+					jobId: tempJobId,
+					trackId: track.id,
+					trackTitle: track.title,
+					artistName: track.artist.name,
+					albumTitle: track.album.title,
+					status: 'pending',
+					progress: 0,
+					bytesDownloaded: 0,
+					totalBytes: 0
+				};
+				tempJob.items.set(track.id, pendingItem);
+			}
+
+			// Add temporary job to store immediately
+			update((jobs) => {
+				jobs.set(tempJobId, tempJob);
+				return new Map(jobs);
+			});
+
+			let jobId: string;
+			try {
+				// Call download API
+				const response = await fetch('/api/download', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ type, id, track, quality, selectedTrackIds })
+				});
+
+				if (!response.ok) {
+					const error = await response.json();
+					// Remove temporary job on error
+					update((jobs) => {
+						jobs.delete(tempJobId);
+						return new Map(jobs);
+					});
+					throw new Error(error.error || 'Failed to start download');
+				}
+
+				const { jobId: realJobId, pendingTracks, albumTitle, artistName } = await response.json();
+				jobId = realJobId;
+
+				// Create real job entry
+				const job: DownloadJob = {
+					jobId,
+					type,
+					albumId: type === 'album' ? id : undefined,
+					albumTitle,
+					items: new Map(),
+					startedAt: Date.now()
+				};
+
+				// For albums, pre-populate all tracks as pending
+				if (type === 'album' && pendingTracks && pendingTracks.length > 0) {
+					for (const t of pendingTracks) {
+						const pendingItem: DownloadItem = {
+							id: `${jobId}-${t.id}`,
+							jobId,
+							trackId: t.id,
+							trackTitle: t.title,
+							artistName: artistName || 'Unknown',
+							albumTitle: albumTitle || 'Unknown',
+							status: 'pending',
+							progress: 0,
+							bytesDownloaded: 0,
+							totalBytes: 0
+						};
+						job.items.set(t.id, pendingItem);
+					}
+				} else if (type === 'track' && track) {
+					// For single tracks, add the item
 					const pendingItem: DownloadItem = {
-						id: `${jobId}-${t.id}`,
+						id: `${jobId}-${track.id}`,
 						jobId,
-						trackId: t.id,
-						trackTitle: t.title,
-						artistName: artistName || 'Unknown',
-						albumTitle: albumTitle || 'Unknown',
+						trackId: track.id,
+						trackTitle: track.title,
+						artistName: track.artist.name,
+						albumTitle: track.album.title,
 						status: 'pending',
 						progress: 0,
 						bytesDownloaded: 0,
 						totalBytes: 0
 					};
-					job.items.set(t.id, pendingItem);
+					job.items.set(track.id, pendingItem);
 				}
-			}
 
-			update((jobs) => {
-				jobs.set(jobId, job);
-				return new Map(jobs);
-			});
+				// Replace temp job with real job
+				update((jobs) => {
+					jobs.delete(tempJobId);
+					jobs.set(jobId, job);
+					return new Map(jobs);
+				});
+			} catch (error) {
+				// Ensure temp job is removed on any error
+				update((jobs) => {
+					jobs.delete(tempJobId);
+					return new Map(jobs);
+				});
+				throw error;
+			}
 
 			// Connect to SSE for progress updates
 			const eventSource = new EventSource(`/api/progress/${jobId}`);
@@ -185,7 +254,8 @@ function createDownloadsStore() {
 			update((jobs) => {
 				for (const [jobId, job] of jobs) {
 					const allDone = Array.from(job.items.values()).every(
-						(item) => item.status === 'complete' || item.status === 'error' || item.status === 'skipped'
+						(item) =>
+							item.status === 'complete' || item.status === 'error' || item.status === 'skipped'
 					);
 					if (allDone && job.items.size > 0) {
 						jobs.delete(jobId);
@@ -219,7 +289,7 @@ export const downloadItems = derived(downloads, ($downloads) => {
 		const statusA = statusOrder[a.status];
 		const statusB = statusOrder[b.status];
 		if (statusA !== statusB) return statusA - statusB;
-		
+
 		const jobA = $downloads.get(a.jobId);
 		const jobB = $downloads.get(b.jobId);
 		return (jobB?.startedAt || 0) - (jobA?.startedAt || 0);

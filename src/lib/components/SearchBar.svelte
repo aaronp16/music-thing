@@ -101,7 +101,7 @@
 			<button
 				type="button"
 				onclick={() => handleTypeChange('tracks')}
-				class="rounded-full px-4 py-1.5 text-sm font-medium transition-all {searchType === 'tracks' 
+				class="rounded-full px-4 py-2 min-h-[44px] text-sm font-medium transition-all {searchType === 'tracks' 
 					? 'bg-white text-black' 
 					: 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white'}"
 			>
@@ -110,7 +110,7 @@
 			<button
 				type="button"
 				onclick={() => handleTypeChange('albums')}
-				class="rounded-full px-4 py-1.5 text-sm font-medium transition-all {searchType === 'albums' 
+				class="rounded-full px-4 py-2 min-h-[44px] text-sm font-medium transition-all {searchType === 'albums' 
 					? 'bg-white text-black' 
 					: 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white'}"
 			>
@@ -119,7 +119,7 @@
 			<button
 				type="button"
 				onclick={() => handleTypeChange('artists')}
-				class="rounded-full px-4 py-1.5 text-sm font-medium transition-all {searchType === 'artists' 
+				class="rounded-full px-4 py-2 min-h-[44px] text-sm font-medium transition-all {searchType === 'artists' 
 					? 'bg-white text-black' 
 					: 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white'}"
 			>

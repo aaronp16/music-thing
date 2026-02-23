@@ -18,19 +18,21 @@
 	const libraryState = $derived($libraryIndex);
 
 	const coverUrl = $derived(getCoverUrl(album.cover, 640));
-	const artistName = $derived(album.artists?.map((a) => a.name).join(', ') || album.artist?.name || 'Unknown Artist');
+	const artistName = $derived(
+		album.artists?.map((a) => a.name).join(', ') || album.artist?.name || 'Unknown Artist'
+	);
 	const year = $derived(album.releaseDate ? new Date(album.releaseDate).getFullYear() : null);
-	
+
 	// Helper to sanitize names (same as server)
 	function sanitize(name: string): string {
 		return name.replace(/[<>:"/\\|?*]/g, '_').trim();
 	}
-	
+
 	// Library status for the album (reactive)
 	const albumLibraryStatus = $derived.by(() => {
 		const total = album.numberOfTracks || 0;
 		const prefix = `${sanitize(artistName).toLowerCase()}|${sanitize(album.title).toLowerCase()}|`;
-		
+
 		const uniqueTracksInLibrary = new Set<string>();
 		for (const key of libraryState.tracks) {
 			if (key.startsWith(prefix)) {
@@ -38,9 +40,9 @@
 				uniqueTracksInLibrary.add(diskAndTrack);
 			}
 		}
-		
+
 		const inLibrary = uniqueTracksInLibrary.size;
-		
+
 		return {
 			inLibrary,
 			total,
@@ -97,7 +99,9 @@
 				</svg>
 			</div>
 		{:else if albumLibraryStatus.inLibrary > 0}
-			<div class="absolute bottom-0 right-0 rounded-tl bg-green-600/90 px-1 py-0.5 text-[9px] font-bold text-white">
+			<div
+				class="absolute right-0 bottom-0 rounded-tl bg-green-600/90 px-1 py-0.5 text-[9px] font-bold text-white"
+			>
 				{albumLibraryStatus.inLibrary}/{albumLibraryStatus.total}
 			</div>
 		{/if}
@@ -108,7 +112,10 @@
 		<div class="flex items-center gap-2">
 			<span class="truncate font-medium text-white">{album.title}</span>
 			{#if album.explicit}
-				<span class="flex-shrink-0 rounded bg-neutral-700 px-1 py-0.5 text-[10px] font-medium text-neutral-400">E</span>
+				<span
+					class="flex-shrink-0 rounded bg-neutral-700 px-1 py-0.5 text-[10px] font-medium text-neutral-400"
+					>E</span
+				>
 			{/if}
 		</div>
 		<div class="flex items-center gap-1 text-sm text-neutral-400">
@@ -136,11 +143,15 @@
 
 	<!-- Download Button or Arrow -->
 	{#if onDownload}
-		<div class="flex items-center opacity-0 transition-opacity group-hover:opacity-100" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+		<div
+			class="flex items-center"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+		>
 			<DownloadButton onDownload={handleDownload} {downloading} size="sm" />
 		</div>
 	{/if}
-	
+
 	<!-- Arrow indicator (always visible) -->
 	<svg
 		class="h-4 w-4 flex-shrink-0 text-neutral-600 transition-colors group-hover:text-neutral-400"

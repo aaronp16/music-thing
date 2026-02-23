@@ -41,43 +41,43 @@
 	const usedPercent = $derived(stats !== null ? (stats.used / stats.total) * 100 : 0);
 	const freeFormatted = $derived(stats !== null ? formatBytes(stats.free) : '');
 	const musicSizeFormatted = $derived(stats !== null ? formatBytes(stats.musicDirSize) : '');
+	const totalFormatted = $derived(stats !== null ? formatBytes(stats.total) : '');
+	const usedFormatted = $derived(stats !== null ? formatBytes(stats.used) : '');
 
-	// Color based on usage
-	const barColor = $derived(
-		usedPercent > 90 ? 'bg-red-500' : usedPercent > 75 ? 'bg-yellow-500' : 'bg-green-500'
-	);
+	// Calculate percentages for each segment
+	const musicPercent = $derived(stats !== null ? (stats.musicDirSize / stats.total) * 100 : 0);
+	const otherUsedPercent = $derived(stats !== null ? ((stats.used - stats.musicDirSize) / stats.total) * 100 : 0);
+	const freePercent = $derived(stats !== null ? (stats.free / stats.total) * 100 : 0);
 </script>
 
 {#if stats}
-	<div class="flex items-center gap-3 text-sm" title="Music: {musicSizeFormatted} | Free: {freeFormatted}">
-		<!-- Disk icon -->
-		<svg class="h-4 w-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-			<path
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				stroke-width="2"
-				d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z"
-			/>
-			<circle cx="12" cy="13" r="3" stroke-width="2" />
-			<path stroke-linecap="round" stroke-width="2" d="M8 7h8" />
-		</svg>
-
-		<!-- Bar -->
-		<div class="flex items-center gap-2">
-			<div class="h-2 w-24 overflow-hidden rounded-full bg-neutral-700">
-				<div
-					class="h-full transition-all duration-300 {barColor}"
-					style="width: {usedPercent}%"
-				></div>
-			</div>
-			<span class="text-neutral-400">{freeFormatted} free</span>
+	<div 
+		class="flex flex-col gap-1" 
+		title="Music Library: {musicSizeFormatted}
+Disk Used: {usedFormatted} / {totalFormatted} ({usedPercent.toFixed(1)}%)
+Disk Free: {freeFormatted}
+Path: {stats.path}"
+	>
+		<!-- Compact text: music used · disk free -->
+		<div class="text-[10px] text-neutral-400">
+			{musicSizeFormatted} used · {freeFormatted} free
 		</div>
-
-		<!-- Music size badge -->
-		<span class="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300">
-			{musicSizeFormatted}
-		</span>
+		
+		<!-- Multi-segment progress bar -->
+		<div class="h-1.5 w-full overflow-hidden rounded-full bg-neutral-700 flex">
+			<!-- Music library segment (green) -->
+			<div
+				class="h-full transition-all duration-300 bg-green-500"
+				style="width: {musicPercent}%"
+			></div>
+			<!-- Other used space segment (yellow/amber) -->
+			<div
+				class="h-full transition-all duration-300 bg-amber-500"
+				style="width: {otherUsedPercent}%"
+			></div>
+			<!-- Free space is just the empty bg-neutral-700 background -->
+		</div>
 	</div>
 {:else if loading}
-	<div class="h-4 w-32 animate-pulse rounded bg-neutral-800"></div>
+	<div class="h-8 w-20 animate-pulse rounded bg-neutral-800"></div>
 {/if}

@@ -47,7 +47,7 @@
 			data = await response.json();
 			// Select all tracks by default
 			if (data?.tracks) {
-				selectedTrackIds = new Set(data.tracks.map(t => t.id));
+				selectedTrackIds = new Set(data.tracks.map((t) => t.id));
 			}
 		} catch (e) {
 			const message = e instanceof Error ? e.message : 'Failed to load album';
@@ -71,10 +71,14 @@
 	}
 
 	// Computed values
-	const artistName = $derived(data?.artists?.map(a => a.name).join(', ') || data?.artist?.name || 'Unknown Artist');
+	const artistName = $derived(
+		data?.artists?.map((a) => a.name).join(', ') || data?.artist?.name || 'Unknown Artist'
+	);
 	const year = $derived(data?.releaseDate ? new Date(data.releaseDate).getFullYear() : null);
 	const totalDuration = $derived(data?.tracks?.reduce((sum, t) => sum + t.duration, 0) || 0);
-	const allSelected = $derived(data?.tracks ? data.tracks.every(t => selectedTrackIds.has(t.id)) : false);
+	const allSelected = $derived(
+		data?.tracks ? data.tracks.every((t) => selectedTrackIds.has(t.id)) : false
+	);
 	const selectedCount = $derived(selectedTrackIds.size);
 	const downloadDisabled = $derived(data?.tracks !== null && selectedTrackIds.size === 0);
 
@@ -100,14 +104,19 @@
 	}
 
 	// Make track key for library lookup
-	function makeTrackKey(artist: string, albumTitle: string, diskNum: number, trackTitle: string): string {
+	function makeTrackKey(
+		artist: string,
+		albumTitle: string,
+		diskNum: number,
+		trackTitle: string
+	): string {
 		return `${sanitize(artist).toLowerCase()}|${sanitize(albumTitle).toLowerCase()}|${diskNum}|${sanitize(trackTitle).toLowerCase()}`;
 	}
 
 	// Check if a track is in library
 	function isTrackInLibrary(track: Track): boolean {
 		const albumVolumes = data?.numberOfVolumes || 1;
-		const diskNum = albumVolumes > 1 ? (track.volumeNumber || 1) : 0;
+		const diskNum = albumVolumes > 1 ? track.volumeNumber || 1 : 0;
 		const key = makeTrackKey(artistName, data?.title || '', diskNum, track.title);
 		return libraryState.tracks.has(key);
 	}
@@ -117,7 +126,7 @@
 		if (!data) return { inLibrary: 0, total: 0, complete: false };
 		const total = data.numberOfTracks || data.tracks?.length || 0;
 		const prefix = `${sanitize(artistName).toLowerCase()}|${sanitize(data.title).toLowerCase()}|`;
-		
+
 		const uniqueTracksInLibrary = new Set<string>();
 		for (const key of libraryState.tracks) {
 			if (key.startsWith(prefix)) {
@@ -125,7 +134,7 @@
 				uniqueTracksInLibrary.add(diskAndTrack);
 			}
 		}
-		
+
 		const inLibrary = uniqueTracksInLibrary.size;
 		return {
 			inLibrary,
@@ -138,7 +147,7 @@
 	function getFeaturedArtists(track: Track): Artist[] {
 		if (!track.artists || track.artists.length <= 1) return [];
 		// Get featured artists (type === 'FEATURED') or artists after the first one
-		return track.artists.filter(a => a.type === 'FEATURED');
+		return track.artists.filter((a) => a.type === 'FEATURED');
 	}
 
 	// Track selection
@@ -152,7 +161,7 @@
 	}
 
 	function toggleDisk(diskTracks: Track[]) {
-		const allInDiskSelected = diskTracks.every(t => selectedTrackIds.has(t.id));
+		const allInDiskSelected = diskTracks.every((t) => selectedTrackIds.has(t.id));
 		if (allInDiskSelected) {
 			for (const t of diskTracks) {
 				selectedTrackIds.delete(t.id);
@@ -166,14 +175,14 @@
 	}
 
 	function isDiskFullySelected(diskTracks: Track[]): boolean {
-		return diskTracks.every(t => selectedTrackIds.has(t.id));
+		return diskTracks.every((t) => selectedTrackIds.has(t.id));
 	}
 
 	function toggleAll() {
 		if (allSelected) {
 			selectedTrackIds = new Set();
 		} else if (data?.tracks) {
-			selectedTrackIds = new Set(data.tracks.map(t => t.id));
+			selectedTrackIds = new Set(data.tracks.map((t) => t.id));
 		}
 	}
 
@@ -183,9 +192,10 @@
 	async function handleDownload(quality: Quality) {
 		if (!data) return;
 		try {
-			const ids = selectedTrackIds.size > 0 && selectedTrackIds.size < (data.tracks?.length || 0)
-				? Array.from(selectedTrackIds)
-				: undefined;
+			const ids =
+				selectedTrackIds.size > 0 && selectedTrackIds.size < (data.tracks?.length || 0)
+					? Array.from(selectedTrackIds)
+					: undefined;
 			await downloads.startDownload('album', data.id, undefined, quality, ids);
 		} catch (e) {
 			const message = e instanceof Error ? e.message : 'Failed to start download';
@@ -205,11 +215,13 @@
 
 <div class="flex h-full flex-col overflow-hidden">
 	<!-- Back button header -->
-	<div class="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
+	<div
+		class="flex items-center gap-2 border-b border-neutral-800 px-3 py-2 sm:gap-3 sm:px-4 sm:py-3"
+	>
 		<button
 			type="button"
 			onclick={goBack}
-			class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
+			class="flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 py-1.5 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white sm:gap-2"
 		>
 			<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -231,8 +243,13 @@
 			</div>
 			<div class="flex flex-1 items-center justify-center">
 				<svg class="h-8 w-8 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
-					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle>
+					<path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path>
 				</svg>
 			</div>
 		</div>
@@ -250,12 +267,16 @@
 			</div>
 		</div>
 	{:else if data}
-		<div class="flex-1 overflow-y-auto">
+		<div class="flex-1 overflow-y-auto pb-20 md:pb-0">
 			<!-- Album header -->
-			<div class="px-6 py-8">
-				<div class="flex items-end gap-6 animate-fade-in">
+			<div class="p-4 sm:p-6 md:px-6 md:py-8">
+				<div
+					class="animate-fade-in flex flex-col items-center gap-4 sm:flex-row sm:items-end sm:gap-4 md:gap-6"
+				>
 					<!-- Album cover -->
-					<div class="relative h-48 w-48 flex-shrink-0 overflow-hidden rounded-lg shadow-2xl">
+					<div
+						class="relative h-32 w-32 flex-shrink-0 overflow-hidden rounded-lg shadow-2xl sm:h-40 sm:w-40 md:h-48 md:w-48"
+					>
 						{#if data.cover}
 							<img
 								src={getCoverUrl(data.cover, 640)}
@@ -264,23 +285,39 @@
 							/>
 						{:else}
 							<div class="flex h-full w-full items-center justify-center bg-neutral-800">
-								<svg class="h-16 w-16 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+								<svg
+									class="h-12 w-12 text-neutral-600 sm:h-14 sm:w-14 md:h-16 md:w-16"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="1.5"
+										d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+									/>
 								</svg>
 							</div>
 						{/if}
 						<!-- Library status badge -->
 						{#if albumLibraryStatus.complete}
-							<div class="absolute right-2 top-2">
-								<div class="rounded-full bg-green-500 p-1.5 shadow-lg">
-									<svg class="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+							<div class="absolute top-1.5 right-1.5 sm:top-2 sm:right-2">
+								<div class="rounded-full bg-green-500 p-1 shadow-lg sm:p-1.5">
+									<svg
+										class="h-2.5 w-2.5 text-white sm:h-3 sm:w-3"
+										fill="currentColor"
+										viewBox="0 0 24 24"
+									>
 										<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
 									</svg>
 								</div>
 							</div>
 						{:else if albumLibraryStatus.inLibrary > 0}
-							<div class="absolute right-2 top-2">
-								<div class="rounded-full bg-green-500/80 px-2 py-1 text-xs font-bold text-white shadow-lg">
+							<div class="absolute top-1.5 right-1.5 sm:top-2 sm:right-2">
+								<div
+									class="rounded-full bg-green-500/80 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-lg sm:px-2 sm:py-1 sm:text-xs"
+								>
 									{albumLibraryStatus.inLibrary}/{albumLibraryStatus.total}
 								</div>
 							</div>
@@ -288,28 +325,35 @@
 					</div>
 
 					<!-- Album info -->
-					<div class="flex flex-col gap-2 animate-fade-in" style="animation-delay: 100ms">
-						<span class="text-sm font-medium uppercase tracking-wider text-neutral-400">
+					<div
+						class="animate-fade-in flex flex-col gap-1.5 text-center sm:gap-2 sm:text-left"
+						style="animation-delay: 100ms"
+					>
+						<span class="text-xs font-medium tracking-wider text-neutral-400 uppercase sm:text-sm">
 							{data.type === 'SINGLE' ? 'Single' : 'Album'}
 						</span>
-						<h1 class="text-4xl font-bold text-white">{data.title}</h1>
-						
+						<h1 class="text-2xl font-bold text-white sm:text-3xl md:text-4xl">{data.title}</h1>
+
 						<!-- Artist (clickable) -->
-						<div class="flex flex-wrap items-center gap-1 text-neutral-300">
-							{#each (data.artists || (data.artist ? [data.artist] : [])) as artist, i}
+						<div
+							class="flex flex-wrap items-center justify-center gap-1 text-sm text-neutral-300 sm:justify-start sm:text-base"
+						>
+							{#each data.artists || (data.artist ? [data.artist] : []) as artist, i}
 								{#if i > 0}<span class="text-neutral-500">,&nbsp;</span>{/if}
 								<button
 									type="button"
 									onclick={() => goToArtist(artist)}
-									class="font-medium hover:text-white hover:underline"
+									class="flex min-h-[44px] items-center font-medium hover:text-white hover:underline sm:min-h-0"
 								>
 									{artist.name}
 								</button>
 							{/each}
 						</div>
-						
+
 						<!-- Meta info -->
-						<div class="flex items-center gap-2 text-sm text-neutral-400">
+						<div
+							class="flex flex-wrap items-center justify-center gap-1 text-xs text-neutral-400 sm:justify-start sm:gap-2 sm:text-sm"
+						>
 							{#if year}
 								<span>{year}</span>
 							{/if}
@@ -337,7 +381,7 @@
 			</div>
 
 			<!-- Track list -->
-			<div class="px-6 pb-8 animate-fade-in" style="animation-delay: 200ms">
+			<div class="animate-fade-in px-4 pb-4 sm:px-6 sm:pb-8" style="animation-delay: 200ms">
 				{#if data.tracks && data.tracks.length > 0}
 					<div class="rounded-lg bg-neutral-800/30">
 						{#if hasMultipleDisks}
@@ -358,7 +402,7 @@
 									{#each diskTracks as track, i (track.id)}
 										{@const featured = getFeaturedArtists(track)}
 										<div
-											class="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-neutral-800/50 animate-fade-in"
+											class="group animate-fade-in flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-neutral-800/50"
 											style="animation-delay: {250 + diskIndex * 100 + i * 30}ms"
 										>
 											<input
@@ -367,15 +411,28 @@
 												onchange={() => toggleTrack(track.id)}
 												class="h-4 w-4 rounded border-neutral-600 bg-neutral-700 text-green-500 focus:ring-green-500 focus:ring-offset-0"
 											/>
-											<span class="w-8 text-right text-sm text-neutral-500">{track.trackNumber}</span>
+											<span class="w-8 text-right text-sm text-neutral-500"
+												>{track.trackNumber}</span
+											>
 											<div class="flex min-w-0 flex-1 flex-col">
 												<div class="flex items-center gap-2">
-													<span class="truncate {selectedTrackIds.has(track.id) ? 'text-white' : 'text-neutral-400'}">{track.title}</span>
+													<span
+														class="truncate {selectedTrackIds.has(track.id)
+															? 'text-white'
+															: 'text-neutral-400'}">{track.title}</span
+													>
 													{#if track.explicit}
-														<span class="flex-shrink-0 rounded bg-neutral-600 px-1 py-0.5 text-[10px] font-medium text-neutral-300">E</span>
+														<span
+															class="flex-shrink-0 rounded bg-neutral-600 px-1 py-0.5 text-[10px] font-medium text-neutral-300"
+															>E</span
+														>
 													{/if}
 													{#if isTrackInLibrary(track)}
-														<svg class="h-4 w-4 flex-shrink-0 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+														<svg
+															class="h-4 w-4 flex-shrink-0 text-green-500"
+															fill="currentColor"
+															viewBox="0 0 24 24"
+														>
 															<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
 														</svg>
 													{/if}
@@ -388,14 +445,16 @@
 															<button
 																type="button"
 																onclick={() => goToArtist(artist)}
-																class="hover:text-white hover:underline"
-															>{artist.name}</button>
+																class="hover:text-white hover:underline">{artist.name}</button
+															>
 														{/each}
 													</div>
 												{/if}
 											</div>
-											<span class="flex-shrink-0 text-sm text-neutral-500">{formatDuration(track.duration)}</span>
-											<div class="opacity-0 transition-opacity group-hover:opacity-100">
+											<span class="flex-shrink-0 text-sm text-neutral-500"
+												>{formatDuration(track.duration)}</span
+											>
+											<div>
 												<DownloadButton
 													onDownload={(q) => handleDownloadTrack(track, q)}
 													downloading={downloadingIds.has(track.id)}
@@ -428,7 +487,7 @@
 							{#each data.tracks as track, i (track.id)}
 								{@const featured = getFeaturedArtists(track)}
 								<div
-									class="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-neutral-800/50 animate-fade-in"
+									class="group animate-fade-in flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-neutral-800/50"
 									style="animation-delay: {250 + i * 30}ms"
 								>
 									<input
@@ -440,12 +499,23 @@
 									<span class="w-8 text-right text-sm text-neutral-500">{track.trackNumber}</span>
 									<div class="flex min-w-0 flex-1 flex-col">
 										<div class="flex items-center gap-2">
-											<span class="truncate {selectedTrackIds.has(track.id) ? 'text-white' : 'text-neutral-400'}">{track.title}</span>
+											<span
+												class="truncate {selectedTrackIds.has(track.id)
+													? 'text-white'
+													: 'text-neutral-400'}">{track.title}</span
+											>
 											{#if track.explicit}
-												<span class="flex-shrink-0 rounded bg-neutral-600 px-1 py-0.5 text-[10px] font-medium text-neutral-300">E</span>
+												<span
+													class="flex-shrink-0 rounded bg-neutral-600 px-1 py-0.5 text-[10px] font-medium text-neutral-300"
+													>E</span
+												>
 											{/if}
 											{#if isTrackInLibrary(track)}
-												<svg class="h-4 w-4 flex-shrink-0 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+												<svg
+													class="h-4 w-4 flex-shrink-0 text-green-500"
+													fill="currentColor"
+													viewBox="0 0 24 24"
+												>
 													<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
 												</svg>
 											{/if}
@@ -458,14 +528,16 @@
 													<button
 														type="button"
 														onclick={() => goToArtist(artist)}
-														class="hover:text-white hover:underline"
-													>{artist.name}</button>
+														class="hover:text-white hover:underline">{artist.name}</button
+													>
 												{/each}
 											</div>
 										{/if}
 									</div>
-									<span class="flex-shrink-0 text-sm text-neutral-500">{formatDuration(track.duration)}</span>
-									<div class="opacity-0 transition-opacity group-hover:opacity-100">
+									<span class="flex-shrink-0 text-sm text-neutral-500"
+										>{formatDuration(track.duration)}</span
+									>
+									<div>
 										<DownloadButton
 											onDownload={(q) => handleDownloadTrack(track, q)}
 											downloading={downloadingIds.has(track.id)}
@@ -481,17 +553,21 @@
 
 			<!-- More from Artist -->
 			{#if data.artistAlbums && data.artistAlbums.length > 0}
-				<section class="mt-10 px-6 animate-fade-in" style="animation-delay: 400ms">
-					<h2 class="mb-4 text-xl font-bold">More from {data.artist?.name || data.artists?.[0]?.name}</h2>
+				<section class="animate-fade-in mt-10 px-6" style="animation-delay: 400ms">
+					<h2 class="mb-4 text-xl font-bold">
+						More from {data.artist?.name || data.artists?.[0]?.name}
+					</h2>
 					<div class="flex gap-4 overflow-x-auto pb-4">
 						{#each data.artistAlbums as album, i (album.id)}
 							<button
 								type="button"
 								onclick={() => goToAlbum(album)}
-								class="group flex w-40 flex-shrink-0 flex-col gap-2 animate-fade-in"
+								class="group animate-fade-in flex w-40 flex-shrink-0 flex-col gap-2"
 								style="animation-delay: {450 + i * 30}ms"
 							>
-								<div class="relative aspect-square w-full overflow-hidden rounded-md bg-neutral-800">
+								<div
+									class="relative aspect-square w-full overflow-hidden rounded-md bg-neutral-800"
+								>
 									{#if album.cover}
 										<img
 											src={getCoverUrl(album.cover, 640)}
@@ -499,14 +575,20 @@
 											class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 										/>
 									{/if}
-									<div class="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20"></div>
+									<div
+										class="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20"
+									></div>
 								</div>
 								<div class="flex flex-col gap-0.5 text-left">
-									<span class="truncate text-sm font-medium text-white group-hover:underline">{album.title}</span>
+									<span class="truncate text-sm font-medium text-white group-hover:underline"
+										>{album.title}</span
+									>
 									<span class="text-xs text-neutral-400">
 										{album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''}
 										{#if album.type}
-											<span class="text-neutral-500"> · {album.type === 'SINGLE' ? 'Single' : 'Album'}</span>
+											<span class="text-neutral-500">
+												· {album.type === 'SINGLE' ? 'Single' : 'Album'}</span
+											>
 										{/if}
 									</span>
 								</div>
@@ -518,17 +600,19 @@
 
 			<!-- Similar Albums -->
 			{#if data.similarAlbums && data.similarAlbums.length > 0}
-				<section class="mt-10 px-6 pb-8 animate-fade-in" style="animation-delay: 500ms">
+				<section class="animate-fade-in mt-10 px-6 pb-8" style="animation-delay: 500ms">
 					<h2 class="mb-4 text-xl font-bold">Similar Albums</h2>
 					<div class="flex gap-4 overflow-x-auto pb-4">
 						{#each data.similarAlbums as album, i (album.id)}
 							<button
 								type="button"
 								onclick={() => goToAlbum(album)}
-								class="group flex w-40 flex-shrink-0 flex-col gap-2 animate-fade-in"
+								class="group animate-fade-in flex w-40 flex-shrink-0 flex-col gap-2"
 								style="animation-delay: {550 + i * 30}ms"
 							>
-								<div class="relative aspect-square w-full overflow-hidden rounded-md bg-neutral-800">
+								<div
+									class="relative aspect-square w-full overflow-hidden rounded-md bg-neutral-800"
+								>
 									{#if album.cover}
 										<img
 											src={getCoverUrl(album.cover, 640)}
@@ -536,11 +620,17 @@
 											class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 										/>
 									{/if}
-									<div class="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20"></div>
+									<div
+										class="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20"
+									></div>
 								</div>
 								<div class="flex flex-col gap-0.5 text-left">
-									<span class="truncate text-sm font-medium text-white group-hover:underline">{album.title}</span>
-									<span class="truncate text-xs text-neutral-400">{album.artist?.name || album.artists?.[0]?.name || ''}</span>
+									<span class="truncate text-sm font-medium text-white group-hover:underline"
+										>{album.title}</span
+									>
+									<span class="truncate text-xs text-neutral-400"
+										>{album.artist?.name || album.artists?.[0]?.name || ''}</span
+									>
 									<span class="text-xs text-neutral-500">
 										{album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''}
 									</span>

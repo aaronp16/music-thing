@@ -1,5 +1,8 @@
-export function load() {
+import type { PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ parent }) => {
+	const { slogan } = await parent();
 	return {
-		placeholder: 'Search for music...'
+		placeholder: slogan
 	};
-}
+};

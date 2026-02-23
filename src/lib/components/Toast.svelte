@@ -21,10 +21,10 @@
 	}
 </script>
 
-<div class="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+<div class="pointer-events-none fixed bottom-20 md:bottom-4 left-4 right-4 md:left-auto md:right-4 z-50 flex flex-col gap-2">
 	{#each $toasts as toast (toast.id)}
 		<div
-			class="pointer-events-auto flex w-80 items-start gap-3 rounded-lg {bgColors[toast.type]} p-4 text-white shadow-lg"
+			class="pointer-events-auto flex w-full md:w-80 max-w-sm md:max-w-none items-start gap-3 rounded-lg {bgColors[toast.type]} p-4 text-white shadow-lg"
 			in:fly={{ x: 100, duration: 200 }}
 			out:fade={{ duration: 150 }}
 			role="alert"

@@ -9,9 +9,13 @@
 
 	interface Props {
 		onArtistClick?: (artistId: number, artistName: string) => void;
+		forcedTab?: 'library' | 'downloads';
+		hideTabBar?: boolean;
+		showLargeTitle?: boolean;
+		titleRight?: import('svelte').Snippet;
 	}
 
-	let { onArtistClick }: Props = $props();
+	let { onArtistClick, forcedTab, hideTabBar = false, showLargeTitle = false, titleRight }: Props = $props();
 
 	// ==========================================================================
 	// Types
@@ -58,6 +62,13 @@
 	// ==========================================================================
 
 	let activeTab = $state<Tab>('library');
+	
+	// Sync with forced tab if provided
+	$effect(() => {
+		if (forcedTab !== undefined) {
+			activeTab = forcedTab;
+		}
+	});
 	let library = $state<Library | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
@@ -128,61 +139,6 @@
 			backfillProgress = null;
 		}
 	}
-
-	// ==========================================================================
-	// Downloads Helpers
-	// ==========================================================================
-
-	function formatBytes(bytes: number): string {
-		if (bytes === 0) return '0 B';
-		const k = 1024;
-		const sizes = ['B', 'KB', 'MB', 'GB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-	}
-
-	function getStatusColor(status: DownloadItem['status']): string {
-		switch (status) {
-			case 'downloading':
-				return 'bg-blue-500';
-			case 'complete':
-				return 'bg-green-500';
-			case 'error':
-				return 'bg-red-500';
-			case 'skipped':
-				return 'bg-amber-500';
-			default:
-				return 'bg-neutral-600';
-		}
-	}
-
-	function getStatusText(item: DownloadItem): string {
-		switch (item.status) {
-			case 'pending':
-				return 'Waiting...';
-			case 'downloading':
-				return `${item.progress}%`;
-			case 'complete':
-				return 'Done';
-			case 'error':
-				return item.error || 'Error';
-			case 'skipped':
-				return 'Exists';
-			default:
-				return '';
-		}
-	}
-
-	// Auto-switch to downloads tab when a NEW download starts (not continuously)
-	let previousDownloadCount = $state(0);
-	$effect(() => {
-		const currentCount = $downloadItems.filter(i => i.status === 'downloading' || i.status === 'pending').length;
-		// Only switch if a new download was added (count increased)
-		if (currentCount > previousDownloadCount && activeTab === 'library') {
-			activeTab = 'downloads';
-		}
-		previousDownloadCount = currentCount;
-	});
 
 	// ==========================================================================
 	// Library Filtering
@@ -336,115 +292,99 @@
 </script>
 
 <div class="flex h-full flex-col">
-	<!-- Header -->
-	<div class="mb-6">
-		<!-- Tab pills -->
-		<div class="flex gap-2">
-			<button
-				onclick={() => activeTab = 'library'}
-				class="rounded-full px-4 py-1.5 text-sm font-medium transition-all {activeTab === 'library' 
-					? 'bg-white text-black' 
-					: 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white'}"
-			>
-				Library
-			</button>
-			<button
-				onclick={() => activeTab = 'downloads'}
-				class="flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-all {activeTab === 'downloads' 
-					? 'bg-white text-black' 
-					: 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white'}"
-			>
-				Downloads
-				{#if activeDownloadCount > 0}
-					<span class="flex h-5 min-w-5 items-center justify-center rounded-full text-xs font-bold {activeTab === 'downloads' ? 'bg-black text-white' : 'bg-blue-500 text-white'}">
-						{activeDownloadCount}
-					</span>
-				{/if}
-			</button>
-		</div>
-	</div>
-
-	<!-- Tab Content -->
-	{#if activeTab === 'library'}
-		<!-- Library Tab -->
-		<div class="flex min-h-0 flex-1 flex-col">
-			<!-- Search bar -->
-			{#if library && library.totalTracks > 0}
-				<div class="relative mb-4">
-					<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-						{#if loading}
-							<svg class="h-4 w-4 animate-spin text-neutral-500" viewBox="0 0 24 24" fill="none">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-							</svg>
-						{:else}
-							<svg class="h-4 w-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-							</svg>
+	<!-- Library Content -->
+	{#if activeTab === 'library' || showLargeTitle}
+		<div class="flex flex-1 flex-col overflow-hidden">
+			<!-- Header -->
+			<div class="px-4 sm:px-6 py-6 sm:py-8 animate-fade-in">
+				{#if showLargeTitle}
+					<div class="mb-4 sm:mb-6 flex items-center justify-between gap-4">
+						<h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-white">Library</h1>
+						{#if titleRight}
+							{@render titleRight()}
 						{/if}
 					</div>
-					<input
-						type="text"
-						bind:value={searchQuery}
-						placeholder="Filter library..."
-						class="w-full rounded-full border-0 bg-neutral-800 py-2 pl-10 pr-10 text-sm text-white placeholder-neutral-500 ring-1 ring-neutral-700 transition-all focus:bg-neutral-750 focus:outline-none focus:ring-2 focus:ring-neutral-600"
-					/>
-					{#if searchQuery}
-						<button
-							onclick={clearSearch}
-							class="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300"
-							aria-label="Clear search"
-						>
-							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-							</svg>
-						</button>
-					{:else}
-						<button
-							onclick={fetchLibrary}
-							disabled={loading}
-							class="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300 disabled:opacity-50"
-							title="Refresh library"
-						>
-							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-							</svg>
-						</button>
-					{/if}
-				</div>
-			{/if}
+				{/if}
 
-			<!-- Stats -->
-			{#if filteredLibrary && filteredLibrary.totalTracks > 0}
-				<div class="mb-3 flex items-center justify-between text-xs text-neutral-500">
-					<span>
-						{#if searchQuery.trim()}
-							Found {filteredLibrary.totalTracks} tracks
-						{:else}
-							{filteredLibrary.totalArtists} artists &middot; {filteredLibrary.totalAlbums} albums &middot; {filteredLibrary.totalTracks} tracks
-						{/if}
-					</span>
-					{#if !searchQuery.trim()}
-						{@const missingImages = library?.artists.filter(a => !a.hasArtistImage).length || 0}
-						{#if backfillRunning && backfillProgress}
-							<span class="text-blue-400">
-								Fetching {backfillProgress.current}/{backfillProgress.total}...
-							</span>
-						{:else if missingImages > 0}
+				<!-- Search bar -->
+				{#if library && library.totalTracks > 0}
+					<div class="relative">
+						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+							{#if loading}
+								<svg class="h-5 w-5 animate-spin text-neutral-400" viewBox="0 0 24 24" fill="none">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+							{:else}
+								<svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+								</svg>
+							{/if}
+						</div>
+						<input
+							type="text"
+							bind:value={searchQuery}
+							placeholder="Filter library..."
+							class="w-full rounded-full border-0 bg-neutral-800 py-3 pl-12 pr-12 text-white placeholder-neutral-500 ring-1 ring-neutral-700 transition-all focus:bg-neutral-750 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						/>
+						{#if searchQuery}
 							<button
-								onclick={backfillArtistImages}
-								class="rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-white"
-								title="Fetch missing artist images from Tidal"
+								onclick={clearSearch}
+								class="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-300"
+								aria-label="Clear search"
 							>
-								Fetch {missingImages} image{missingImages !== 1 ? 's' : ''}
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						{:else}
+							<button
+								onclick={fetchLibrary}
+								disabled={loading}
+								class="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-300 disabled:opacity-50"
+								title="Refresh library"
+							>
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+								</svg>
 							</button>
 						{/if}
-					{/if}
-				</div>
-			{/if}
+					</div>
+				{/if}
+			</div>
 
-			<!-- Library Content -->
-			<div class="min-h-0 flex-1 overflow-y-auto">
+			<!-- Results area -->
+			<div class="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-8">
+				<!-- Stats -->
+				{#if filteredLibrary && filteredLibrary.totalTracks > 0}
+					<div class="mb-3 flex items-center justify-between text-xs text-neutral-500">
+						<span>
+							{#if searchQuery.trim()}
+								Found {filteredLibrary.totalTracks} tracks
+							{:else}
+								{filteredLibrary.totalArtists} artists &middot; {filteredLibrary.totalAlbums} albums &middot; {filteredLibrary.totalTracks} tracks
+							{/if}
+						</span>
+						{#if !searchQuery.trim()}
+							{@const missingImages = library?.artists.filter(a => !a.hasArtistImage).length || 0}
+							{#if backfillRunning && backfillProgress}
+								<span class="text-blue-400">
+									Fetching {backfillProgress.current}/{backfillProgress.total}...
+								</span>
+							{:else if missingImages > 0}
+								<button
+									onclick={backfillArtistImages}
+									class="rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-white"
+									title="Fetch missing artist images from Tidal"
+								>
+									Fetch {missingImages} image{missingImages !== 1 ? 's' : ''}
+								</button>
+							{/if}
+						{/if}
+					</div>
+				{/if}
+
+				<!-- Library Content -->
 				{#if error}
 					<div class="flex flex-col items-center justify-center py-12 text-center">
 						<div class="mb-3 rounded-full bg-red-900/30 p-3">
@@ -589,87 +529,6 @@
 					</div>
 				{/if}
 			</div>
-		</div>
-	{:else}
-		<!-- Downloads Tab -->
-		<div class="flex min-h-0 flex-1 flex-col">
-			{#if $downloadItems.length > 0}
-				<!-- Header -->
-				<div class="mb-3 flex items-center justify-between text-xs text-neutral-500">
-					<span>{$downloadItems.length} item{$downloadItems.length !== 1 ? 's' : ''}</span>
-					{#if !$hasActiveDownloads}
-						<button
-							onclick={() => downloads.clearCompleted()}
-							class="rounded-full bg-neutral-800 px-2 py-1 text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-white"
-						>
-							Clear all
-						</button>
-					{/if}
-				</div>
-
-				<!-- Download items -->
-				<div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
-					{#each $downloadItems as item (item.id)}
-						<div 
-							class="rounded-lg p-3 transition-colors {item.status === 'pending' ? 'bg-neutral-800/30' : 'bg-neutral-800/50'}"
-						>
-							<div class="mb-2 flex items-start justify-between gap-3">
-								<div class="min-w-0 flex-1">
-									<div class="truncate text-sm font-medium {item.status === 'pending' ? 'text-neutral-500' : 'text-white'}">
-										{item.trackTitle}
-									</div>
-									<div class="truncate text-xs {item.status === 'pending' ? 'text-neutral-600' : 'text-neutral-500'}">
-										{item.artistName} &middot; {item.albumTitle}
-									</div>
-								</div>
-								<div class="flex flex-shrink-0 items-center gap-2">
-									{#if item.status === 'downloading'}
-										<span class="text-xs font-medium text-blue-400">{item.progress}%</span>
-									{:else if item.status === 'complete'}
-										<svg class="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 24 24">
-											<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-										</svg>
-									{:else if item.status === 'error'}
-										<svg class="h-4 w-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-											<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-										</svg>
-									{:else if item.status === 'skipped'}
-										<span class="rounded bg-amber-900/50 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">Exists</span>
-									{:else if item.status === 'pending'}
-										<span class="text-xs text-neutral-600">Waiting</span>
-									{/if}
-								</div>
-							</div>
-
-							<!-- Progress bar -->
-							<div class="h-1 overflow-hidden rounded-full bg-neutral-700">
-								<div
-									class="h-full transition-all duration-300 {getStatusColor(item.status)}"
-									style="width: {item.progress}%"
-								></div>
-							</div>
-							
-							{#if item.status === 'downloading' && item.totalBytes > 0}
-								<div class="mt-1 text-right text-[10px] text-neutral-500">
-									{formatBytes(item.bytesDownloaded)} / {formatBytes(item.totalBytes)}
-								</div>
-							{/if}
-							
-							{#if item.status === 'error' && item.error}
-								<div class="mt-1 truncate text-xs text-red-400">{item.error}</div>
-							{/if}
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<div class="flex flex-1 flex-col items-center justify-center py-12 text-center">
-					<svg class="mb-3 h-12 w-12 text-neutral-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-					</svg>
-					<p class="text-sm text-neutral-400">No downloads</p>
-					<p class="mt-1 text-xs text-neutral-500">Downloads will appear here</p>
-				</div>
-			{/if}
 		</div>
 	{/if}
 </div>

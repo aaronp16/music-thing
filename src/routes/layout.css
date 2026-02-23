@@ -106,3 +106,34 @@
 .animate-scale-in {
 	animation: scale-in 0.3s ease-out both;
 }
+
+/* Mobile tab content transitions */
+@keyframes tab-slide-left {
+	from {
+		transform: translateX(100%);
+		opacity: 0;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+
+@keyframes tab-slide-right {
+	from {
+		transform: translateX(-100%);
+		opacity: 0;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+
+.tab-slide-left {
+	animation: tab-slide-left 0.25s ease-out forwards;
+}
+
+.tab-slide-right {
+	animation: tab-slide-right 0.25s ease-out forwards;
+}
