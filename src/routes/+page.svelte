@@ -9,6 +9,7 @@
 	import DiskSpace from '$lib/components/DiskSpace.svelte';
 	import DownloadsHeaderIndicator from '$lib/components/DownloadsHeaderIndicator.svelte';
 	import DownloadsModal from '$lib/components/DownloadsModal.svelte';
+	import MetadataPanel from '$lib/components/MetadataPanel.svelte';
 	import type { Track, Album, Artist, SearchResult, Quality } from '$lib/types';
 	import {
 		downloads,
@@ -54,6 +55,20 @@
 
 	function closeDownloadsModal() {
 		isDownloadsModalOpen = false;
+	}
+
+	// Metadata panel state
+	let isMetadataPanelOpen = $state(false);
+	let selectedTrackPath = $state<string | null>(null);
+
+	function openMetadataPanel(trackPath: string) {
+		selectedTrackPath = trackPath;
+		isMetadataPanelOpen = true;
+	}
+
+	function closeMetadataPanel() {
+		isMetadataPanelOpen = false;
+		selectedTrackPath = null;
 	}
 
 	// Navigation state
@@ -510,6 +525,7 @@
 						<SidePanel
 							bind:this={sidePanel}
 							onArtistClick={handleArtistClick}
+							onTrackMetadataClick={openMetadataPanel}
 							forcedTab="library"
 							hideTabBar={true}
 						/>
@@ -534,7 +550,12 @@
 
 	<!-- Side Panel (right side on desktop, hidden on mobile) - Library only -->
 	<div class="hidden flex-col md:flex md:w-80 lg:w-96 xl:w-[580px]">
-		<SidePanel bind:this={sidePanel} onArtistClick={handleArtistClick} showLargeTitle={true}>
+		<SidePanel
+			bind:this={sidePanel}
+			onArtistClick={handleArtistClick}
+			onTrackMetadataClick={openMetadataPanel}
+			showLargeTitle={true}
+		>
 			{#snippet titleRight()}
 				<div class="flex items-center gap-3">
 					<DownloadsHeaderIndicator onClick={openDownloadsModal} />
@@ -552,3 +573,10 @@
 
 <!-- Downloads Modal -->
 <DownloadsModal isOpen={isDownloadsModalOpen} onClose={closeDownloadsModal} />
+
+<!-- Metadata Panel -->
+<MetadataPanel
+	isOpen={isMetadataPanelOpen}
+	trackPath={selectedTrackPath}
+	onClose={closeMetadataPanel}
+/>

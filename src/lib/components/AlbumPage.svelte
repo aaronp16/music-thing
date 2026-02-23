@@ -146,8 +146,16 @@
 	// Get featured artists for a track
 	function getFeaturedArtists(track: Track): Artist[] {
 		if (!track.artists || track.artists.length <= 1) return [];
-		// Get featured artists (type === 'FEATURED') or artists after the first one
-		return track.artists.filter((a) => a.type === 'FEATURED');
+
+		// The API is inconsistent: sometimes featured artists have type='FEATURED',
+		// sometimes they have type='MAIN' but are listed after the primary artist.
+		// Strategy: treat as featured if:
+		// 1. Has type === 'FEATURED', OR
+		// 2. Is a MAIN artist but not the first one (secondary main artist)
+
+		return track.artists.filter(
+			(a, index) => a.type === 'FEATURED' || (a.type === 'MAIN' && index > 0)
+		);
 	}
 
 	// Track selection

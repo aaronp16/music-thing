@@ -6,8 +6,19 @@ import { createWriteStream } from 'fs';
 import { mkdir, access, constants, unlink, copyFile, readdir } from 'fs/promises';
 import path from 'path';
 import { env } from './env';
-import { getStreamUrlWithFallback, getCoverUrl, getArtistImageUrl, getAlbum, getArtistInfo, type Track, type Album, type AlbumWithTracks, type Quality as HifiQuality } from './hifi-client';
-import { embedMetadata, extractMetadata } from './metadata';
+import {
+	getStreamUrlWithFallback,
+	getCoverUrl,
+	getArtistImageUrl,
+	getAlbum,
+	getArtistInfo,
+	type Track,
+	type Album,
+	type AlbumWithTracks,
+	type Quality as HifiQuality
+} from './hifi-client';
+import { embedMetadata, extractMetadata, saveMetadataJSON, mergeMetadata } from './metadata';
+import { enrichTrackMetadata } from './musicbrainz-client';
 import { QUALITY_OPTIONS, DEFAULT_QUALITY, type Quality } from '$lib/types';
 
 // =============================================================================
@@ -61,35 +72,32 @@ function sanitize(name: string): string {
  * Get file extension for a quality level
  */
 function getExtension(quality: Quality): string {
-	const option = QUALITY_OPTIONS.find(o => o.value === quality);
+	const option = QUALITY_OPTIONS.find((o) => o.value === quality);
 	return option?.extension || 'flac';
 }
 
 /**
  * Generate file path for a track
  */
-function getFilePath(track: Track, quality: Quality = DEFAULT_QUALITY, hasMultipleVolumes = false): string {
+function getFilePath(
+	track: Track,
+	quality: Quality = DEFAULT_QUALITY,
+	hasMultipleVolumes = false
+): string {
 	const artistName = sanitize(track.artist?.name || track.artists?.[0]?.name || 'Unknown Artist');
 	const albumTitle = sanitize(track.album?.title || 'Unknown Album');
 	const trackNum = String(track.trackNumber || 1).padStart(2, '0');
 	const trackTitle = sanitize(track.title);
 	const ext = getExtension(quality);
-	
+
 	// Check for multi-disk - always create disk folders if album has multiple volumes
 	const diskNum = track.volumeNumber || 1;
-	const diskFolder = (hasMultipleVolumes || diskNum > 1) ? `Disk ${diskNum}` : null;
-	
+	const diskFolder = hasMultipleVolumes || diskNum > 1 ? `Disk ${diskNum}` : null;
+
 	// Build path - include disk folder if multiple volumes OR disk > 1
-	const folderPath = diskFolder 
-		? path.join(albumTitle, diskFolder)
-		: albumTitle;
-	
-	return path.join(
-		env.MUSIC_DIR,
-		artistName,
-		folderPath,
-		`${trackNum} - ${trackTitle}.${ext}`
-	);
+	const folderPath = diskFolder ? path.join(albumTitle, diskFolder) : albumTitle;
+
+	return path.join(env.MUSIC_DIR, artistName, folderPath, `${trackNum} - ${trackTitle}.${ext}`);
 }
 
 /**
@@ -98,7 +106,7 @@ function getFilePath(track: Track, quality: Quality = DEFAULT_QUALITY, hasMultip
 function getAlbumPath(track: Track): string {
 	const artistName = sanitize(track.artist?.name || track.artists?.[0]?.name || 'Unknown Artist');
 	const albumTitle = sanitize(track.album?.title || 'Unknown Album');
-	
+
 	// For multi-disk albums, put cover in the main album folder
 	return path.join(env.MUSIC_DIR, artistName, albumTitle);
 }
@@ -190,11 +198,11 @@ async function cleanupTempFile(tempPath: string | null): Promise<void> {
  */
 export async function initTempDir(): Promise<void> {
 	if (!env.TEMP_DIR) return;
-	
+
 	try {
 		// Create temp directory
 		await mkdir(env.TEMP_DIR, { recursive: true });
-		
+
 		// Clean up any existing files (orphaned from crashed downloads)
 		const files = await readdir(env.TEMP_DIR);
 		for (const file of files) {
@@ -204,8 +212,10 @@ export async function initTempDir(): Promise<void> {
 				// Ignore individual file cleanup errors
 			}
 		}
-		
-		console.log(`[downloader] Temp directory initialized: ${env.TEMP_DIR} (cleaned ${files.length} orphaned files)`);
+
+		console.log(
+			`[downloader] Temp directory initialized: ${env.TEMP_DIR} (cleaned ${files.length} orphaned files)`
+		);
 	} catch (err) {
 		console.error('[downloader] Failed to initialize temp directory:', err);
 	}
@@ -232,7 +242,7 @@ async function downloadTrack(
 	const filePath = getFilePath(track, quality, hasMultipleVolumes);
 	const albumPath = getAlbumPath(track);
 	const coverPath = path.join(albumPath, 'cover.jpg');
-	
+
 	const progressState: DownloadProgress = {
 		id: `${jobId}-${track.id}`,
 		trackId: track.id,
@@ -244,88 +254,111 @@ async function downloadTrack(
 		bytesDownloaded: 0,
 		totalBytes: 0
 	};
-	
+
 	// Determine if using temp download (production) or direct (dev)
 	const ext = getExtension(quality);
 	let tempFilePath = getTempFilePath(jobId, track.id, ext);
-	
+
 	try {
 		progressState.status = 'downloading';
 		onProgress(progressState);
-		
+
 		// Get stream URL first to determine actual quality (may fallback)
 		const { url: streamUrl, actualQuality } = await getStreamUrlWithFallback(track.id, quality);
-		
+
 		// Update file path if quality changed due to fallback
-		const actualFilePath = actualQuality !== quality ? getFilePath(track, actualQuality, hasMultipleVolumes) : filePath;
-		
+		const actualFilePath =
+			actualQuality !== quality ? getFilePath(track, actualQuality, hasMultipleVolumes) : filePath;
+
 		// Update temp file path if quality changed
 		if (actualQuality !== quality && tempFilePath) {
 			const actualExt = getExtension(actualQuality);
 			tempFilePath = getTempFilePath(jobId, track.id, actualExt);
 		}
-		
+
 		// Determine where to write the download
 		const downloadPath = tempFilePath || actualFilePath;
-		
+
 		// Create directory for download destination
 		await mkdir(path.dirname(downloadPath), { recursive: true });
-		
+
 		// Download with progress
 		const response = await fetch(streamUrl);
-		
+
 		if (!response.ok) {
 			throw new Error(`Failed to download: ${response.statusText}`);
 		}
-		
+
 		const totalBytes = parseInt(response.headers.get('content-length') || '0');
 		progressState.totalBytes = totalBytes;
-		
+
 		// Stream to file (temp or final depending on environment)
 		const writer = createWriteStream(downloadPath);
 		const reader = response.body?.getReader();
-		
+
 		if (!reader) {
 			throw new Error('No response body');
 		}
-		
+
 		let bytesDownloaded = 0;
-		
+
 		while (true) {
 			const { done, value } = await reader.read();
-			
+
 			if (done) break;
-			
+
 			writer.write(Buffer.from(value));
 			bytesDownloaded += value.length;
-			
+
 			progressState.bytesDownloaded = bytesDownloaded;
 			// Reserve last 5% for metadata embedding + move
 			progressState.progress = totalBytes > 0 ? Math.round((bytesDownloaded / totalBytes) * 90) : 0;
 			onProgress(progressState);
 		}
-		
+
 		writer.end();
-		
+
 		// Wait for write to complete
 		await new Promise<void>((resolve, reject) => {
 			writer.on('finish', resolve);
 			writer.on('error', reject);
 		});
-		
-		// Embed metadata (in temp file if using temp downloads)
+
+		// Fetch extended metadata from MusicBrainz
+		let enrichedMetadata = null;
 		try {
-			const metadata = extractMetadata(track, totalTracks);
+			const artistName =
+				track.artists?.map((a) => a.name).join(', ') || track.artist?.name || 'Unknown Artist';
+			enrichedMetadata = await enrichTrackMetadata(track.isrc, artistName, track.title);
+
+			if (enrichedMetadata) {
+				console.log(
+					`Enriched metadata for: ${track.title} (confidence: ${(enrichedMetadata.matchConfidence || 1) * 100}%)`
+				);
+			}
+		} catch (enrichError) {
+			console.warn('Failed to fetch extended metadata from MusicBrainz:', enrichError);
+		}
+
+		// Embed metadata (basic + enriched) into audio file
+		try {
+			const basicMetadata = extractMetadata(track, totalTracks);
+			const finalMetadata = mergeMetadata(basicMetadata, enrichedMetadata);
+
 			// Check if cover art exists for embedding
 			if (await fileExists(coverPath)) {
-				metadata.coverArtPath = coverPath;
+				finalMetadata.coverArtPath = coverPath;
 			}
-			await embedMetadata(downloadPath, metadata);
+
+			await embedMetadata(downloadPath, finalMetadata);
+
+			// Save sidecar JSON (without coverArtPath)
+			await saveMetadataJSON(downloadPath, finalMetadata);
 		} catch (metadataError) {
 			// Log but don't fail the download if metadata embedding fails
 			console.error('Failed to embed metadata:', metadataError);
 		}
-		
+
 		// If using temp downloads, move to final destination
 		if (tempFilePath) {
 			// Create final directory
@@ -333,17 +366,16 @@ async function downloadTrack(
 			// Move file (copy + delete for cross-device)
 			await moveFile(tempFilePath, actualFilePath);
 		}
-		
+
 		progressState.status = 'complete';
 		progressState.progress = 100;
 		onProgress(progressState);
-		
+
 		return progressState;
-		
 	} catch (error) {
 		// Clean up temp file on error
 		await cleanupTempFile(tempFilePath);
-		
+
 		progressState.status = 'error';
 		progressState.error = error instanceof Error ? error.message : 'Download failed';
 		onProgress(progressState);
@@ -357,42 +389,42 @@ async function downloadTrack(
 async function downloadCoverArt(track: Track): Promise<void> {
 	const albumPath = getAlbumPath(track);
 	const coverPath = path.join(albumPath, 'cover.jpg');
-	
+
 	// Skip if already exists
 	if (await fileExists(coverPath)) {
 		return;
 	}
-	
+
 	// Generate a unique temp file name for cover art
-	const tempCoverPath = env.TEMP_DIR 
+	const tempCoverPath = env.TEMP_DIR
 		? path.join(env.TEMP_DIR, `cover-${track.album?.id || Date.now()}.jpg`)
 		: null;
-	
+
 	try {
 		const coverUuid = track.album?.cover;
 		if (!coverUuid) return;
-		
+
 		const coverUrl = getCoverUrl(coverUuid, 1280);
 		const response = await fetch(coverUrl);
-		
+
 		if (!response.ok) return;
-		
+
 		// Determine download path (temp or final)
 		const downloadPath = tempCoverPath || coverPath;
-		
+
 		// Create directory for download destination
 		await mkdir(path.dirname(downloadPath), { recursive: true });
-		
+
 		const buffer = await response.arrayBuffer();
 		const writer = createWriteStream(downloadPath);
 		writer.write(Buffer.from(buffer));
 		writer.end();
-		
+
 		await new Promise<void>((resolve, reject) => {
 			writer.on('finish', resolve);
 			writer.on('error', reject);
 		});
-		
+
 		// If using temp downloads, move to final destination
 		if (tempCoverPath) {
 			await mkdir(albumPath, { recursive: true });
@@ -412,48 +444,48 @@ async function downloadCoverArt(track: Track): Promise<void> {
 async function downloadArtistImage(track: Track): Promise<void> {
 	const artistPath = getArtistPath(track);
 	const artistImagePath = path.join(artistPath, 'artist.jpg');
-	
+
 	// Skip if already exists
 	if (await fileExists(artistImagePath)) {
 		return;
 	}
-	
+
 	// Get artist ID
 	const artistId = track.artist?.id || track.artists?.[0]?.id;
 	if (!artistId) return;
-	
+
 	// Generate a unique temp file name for artist image
-	const tempArtistImagePath = env.TEMP_DIR 
+	const tempArtistImagePath = env.TEMP_DIR
 		? path.join(env.TEMP_DIR, `artist-${artistId}.jpg`)
 		: null;
-	
+
 	try {
 		// Fetch artist info to get the picture UUID
 		const artistInfo = await getArtistInfo(artistId);
 		const pictureUuid = artistInfo.artist?.picture;
 		if (!pictureUuid) return;
-		
+
 		const artistImageUrl = getArtistImageUrl(pictureUuid, 750);
 		const response = await fetch(artistImageUrl);
-		
+
 		if (!response.ok) return;
-		
+
 		// Determine download path (temp or final)
 		const downloadPath = tempArtistImagePath || artistImagePath;
-		
+
 		// Create directory for download destination
 		await mkdir(path.dirname(downloadPath), { recursive: true });
-		
+
 		const buffer = await response.arrayBuffer();
 		const writer = createWriteStream(downloadPath);
 		writer.write(Buffer.from(buffer));
 		writer.end();
-		
+
 		await new Promise<void>((resolve, reject) => {
 			writer.on('finish', resolve);
 			writer.on('error', reject);
 		});
-		
+
 		// If using temp downloads, move to final destination
 		if (tempArtistImagePath) {
 			await mkdir(artistPath, { recursive: true });
@@ -473,9 +505,12 @@ async function downloadArtistImage(track: Track): Promise<void> {
 /**
  * Start downloading a single track
  */
-export async function startTrackDownload(track: Track, quality: Quality = DEFAULT_QUALITY): Promise<string> {
+export async function startTrackDownload(
+	track: Track,
+	quality: Quality = DEFAULT_QUALITY
+): Promise<string> {
 	const jobId = generateJobId();
-	
+
 	const job: DownloadJob = {
 		id: jobId,
 		type: 'track',
@@ -483,21 +518,26 @@ export async function startTrackDownload(track: Track, quality: Quality = DEFAUL
 		currentTrackIndex: 0,
 		progress: new Map()
 	};
-	
+
 	activeJobs.set(jobId, job);
-	
+
 	// Start download in background
 	(async () => {
 		try {
 			// Download cover art and artist image first
 			await downloadCoverArt(track);
 			await downloadArtistImage(track);
-			
+
 			// Download track (no totalTracks for single track downloads)
-			await downloadTrack(track, jobId, (progress) => {
-				job.progress.set(track.id, progress);
-				notifyProgress(jobId, progress);
-			}, quality);
+			await downloadTrack(
+				track,
+				jobId,
+				(progress) => {
+					job.progress.set(track.id, progress);
+					notifyProgress(jobId, progress);
+				},
+				quality
+			);
 		} finally {
 			// Keep job around for a bit so client can get final status
 			setTimeout(() => {
@@ -506,7 +546,7 @@ export async function startTrackDownload(track: Track, quality: Quality = DEFAUL
 			}, 30000);
 		}
 	})();
-	
+
 	return jobId;
 }
 
@@ -514,34 +554,35 @@ export async function startTrackDownload(track: Track, quality: Quality = DEFAUL
  * Start downloading an album (sequential track downloads)
  */
 export async function startAlbumDownload(
-	albumId: number, 
+	albumId: number,
 	quality: Quality = DEFAULT_QUALITY,
 	selectedTrackIds?: number[]
 ): Promise<string> {
 	const jobId = generateJobId();
-	
+
 	// Fetch album with tracks
 	const album = await getAlbum(albumId);
 	const allTracks = album.tracks || [];
 	const hasMultipleVolumes = (album.numberOfVolumes || 1) > 1;
-	
+
 	if (allTracks.length === 0) {
 		throw new Error('Album has no tracks');
 	}
-	
+
 	// Filter tracks based on selection
-	const tracks = selectedTrackIds && selectedTrackIds.length > 0
-		? allTracks.filter(t => selectedTrackIds.includes(t.id))
-		: allTracks;
-	
+	const tracks =
+		selectedTrackIds && selectedTrackIds.length > 0
+			? allTracks.filter((t) => selectedTrackIds.includes(t.id))
+			: allTracks;
+
 	if (tracks.length === 0) {
 		throw new Error('No tracks selected');
 	}
-	
+
 	const totalTracks = tracks.length;
-	
+
 	// Enrich tracks with album info
-	const enrichedTracks: Track[] = tracks.map(t => ({
+	const enrichedTracks: Track[] = tracks.map((t) => ({
 		...t,
 		album: {
 			id: album.id,
@@ -551,7 +592,7 @@ export async function startAlbumDownload(
 			releaseDate: album.releaseDate
 		}
 	}));
-	
+
 	const job: DownloadJob = {
 		id: jobId,
 		type: 'album',
@@ -560,9 +601,9 @@ export async function startAlbumDownload(
 		currentTrackIndex: 0,
 		progress: new Map()
 	};
-	
+
 	activeJobs.set(jobId, job);
-	
+
 	// Start downloads in background (sequential)
 	(async () => {
 		try {
@@ -571,16 +612,23 @@ export async function startAlbumDownload(
 				await downloadCoverArt(enrichedTracks[0]);
 				await downloadArtistImage(enrichedTracks[0]);
 			}
-			
+
 			// Download tracks one by one
 			for (let i = 0; i < enrichedTracks.length; i++) {
 				job.currentTrackIndex = i;
 				const track = enrichedTracks[i];
-				
-				await downloadTrack(track, jobId, (progress) => {
-					job.progress.set(track.id, progress);
-					notifyProgress(jobId, progress);
-				}, quality, totalTracks, hasMultipleVolumes);
+
+				await downloadTrack(
+					track,
+					jobId,
+					(progress) => {
+						job.progress.set(track.id, progress);
+						notifyProgress(jobId, progress);
+					},
+					quality,
+					totalTracks,
+					hasMultipleVolumes
+				);
 			}
 		} finally {
 			// Keep job around for a bit
@@ -590,7 +638,7 @@ export async function startAlbumDownload(
 			}, 30000);
 		}
 	})();
-	
+
 	return jobId;
 }
 
@@ -611,9 +659,9 @@ export function subscribeToProgress(
 	if (!progressListeners.has(jobId)) {
 		progressListeners.set(jobId, new Set());
 	}
-	
+
 	progressListeners.get(jobId)!.add(listener);
-	
+
 	// Send current progress state immediately
 	const job = activeJobs.get(jobId);
 	if (job) {
@@ -621,7 +669,7 @@ export function subscribeToProgress(
 			listener(progress);
 		}
 	}
-	
+
 	// Return unsubscribe function
 	return () => {
 		progressListeners.get(jobId)?.delete(listener);

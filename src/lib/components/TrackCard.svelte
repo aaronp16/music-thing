@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Track, Quality } from '$lib/types';
+	import type { Track, Quality, Artist } from '$lib/types';
 	import { formatDuration, getCoverUrl } from '$lib/types';
 	import { libraryIndex } from '$lib/stores/libraryIndex';
 	import DownloadButton from './DownloadButton.svelte';
@@ -19,6 +19,15 @@
 
 	const coverUrl = $derived(getCoverUrl(track.album.cover, 640));
 	const duration = $derived(formatDuration(track.duration));
+
+	// Get primary and featured artists
+	const artists = $derived(track.artists || [track.artist]);
+	const primaryArtist = $derived(artists[0]);
+	const featuredArtists = $derived(
+		artists.slice(1).filter((a) => a.type === 'FEATURED' || a.type === 'MAIN')
+	);
+
+	// For library lookup, use all artist names joined
 	const artistName = $derived(track.artists?.map((a) => a.name).join(', ') || track.artist.name);
 
 	function sanitize(name: string): string {
@@ -37,12 +46,13 @@
 		onDownload(track, quality);
 	}
 
-	function handleArtistClick(e: Event) {
-		e.stopPropagation();
-		if (onArtistClick) {
-			const artist = track.artist;
-			onArtistClick(artist.id, artist.name);
-		}
+	function handleArtistClickEvent(artist: Artist) {
+		return (e: Event) => {
+			e.stopPropagation();
+			if (onArtistClick) {
+				onArtistClick(artist.id, artist.name);
+			}
+		};
 	}
 
 	function handleAlbumClick(e: Event) {
@@ -78,18 +88,41 @@
 			{/if}
 		</div>
 		<div class="flex items-center gap-1 text-sm text-neutral-400">
+			<!-- Primary artist -->
 			{#if onArtistClick}
 				<button
 					type="button"
-					onclick={handleArtistClick}
+					onclick={handleArtistClickEvent(primaryArtist)}
 					class="truncate hover:text-white hover:underline"
 				>
-					{artistName}
+					{primaryArtist.name}
 				</button>
 			{:else}
-				<span class="truncate">{artistName}</span>
+				<span class="truncate">{primaryArtist.name}</span>
 			{/if}
+
+			<!-- Featured artists -->
+			{#if featuredArtists.length > 0}
+				<span class="flex-shrink-0 text-neutral-500">feat.</span>
+				{#each featuredArtists as artist, i}
+					{#if i > 0}<span>,&nbsp;</span>{/if}
+					{#if onArtistClick}
+						<button
+							type="button"
+							onclick={handleArtistClickEvent(artist)}
+							class="hover:text-white hover:underline"
+						>
+							{artist.name}
+						</button>
+					{:else}
+						<span>{artist.name}</span>
+					{/if}
+				{/each}
+			{/if}
+
 			<span class="flex-shrink-0 text-neutral-600">&middot;</span>
+
+			<!-- Album -->
 			{#if onAlbumClick}
 				<button
 					type="button"

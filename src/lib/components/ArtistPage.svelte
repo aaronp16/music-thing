@@ -76,15 +76,25 @@
 		isFeature: boolean;
 	} {
 		const artists = track.artists || [track.artist];
-		const mainArtists = artists.filter((a) => a.type !== 'FEATURED');
-		const featuredArtists = artists.filter((a) => a.type === 'FEATURED');
 
-		// Check if current artist is the primary (first main artist)
-		const primaryArtist = mainArtists[0];
+		// The API is inconsistent: sometimes featured artists have type='FEATURED',
+		// sometimes they have type='MAIN' but are listed after the primary artist.
+		// Primary artist is always the first one
+		const primaryArtist = artists[0];
+
+		// Get primary artists (just the first one, or all with type='MAIN' that come before any FEATURED)
+		const primaryArtists = [primaryArtist];
+
+		// Get featured artists: type='FEATURED' OR secondary MAIN artists
+		const featuredArtists = artists
+			.slice(1)
+			.filter((a, index) => a.type === 'FEATURED' || a.type === 'MAIN');
+
+		// Check if current viewing artist is featured on this track
 		const isFeature = primaryArtist && primaryArtist.id !== artistId;
 
 		return {
-			primary: mainArtists,
+			primary: primaryArtists,
 			featured: featuredArtists,
 			isFeature
 		};
