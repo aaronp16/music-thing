@@ -52,6 +52,10 @@ export interface TrackMetadata {
 	mbid_release?: string;
 	mbid_artist?: string;
 
+	// Lyrics
+	lyrics?: string; // Plain text lyrics
+	syncedLyrics?: string; // LRC format with timestamps
+
 	// Enrichment metadata
 	enrichedAt?: string;
 	enrichedFrom?: 'musicbrainz';
@@ -208,6 +212,14 @@ export async function embedMetadata(filePath: string, metadata: TrackMetadata): 
 		if (metadata.mbid_artist) {
 			args.push('-metadata', `MUSICBRAINZ_ARTISTID=${metadata.mbid_artist}`);
 		}
+
+		// Lyrics
+		if (metadata.lyrics) {
+			args.push('-metadata', `LYRICS=${metadata.lyrics}`);
+		}
+		if (metadata.syncedLyrics) {
+			args.push('-metadata', `SYNCEDLYRICS=${metadata.syncedLyrics}`);
+		}
 	} else {
 		// M4A uses iTunes-style tags (lowercase)
 		args.push('-metadata', `title=${metadata.title}`);
@@ -231,6 +243,11 @@ export async function embedMetadata(filePath: string, metadata: TrackMetadata): 
 		}
 		if (metadata.genre) {
 			args.push('-metadata', `genre=${metadata.genre}`);
+		}
+
+		// M4A only supports plain text lyrics (no synced lyrics)
+		if (metadata.lyrics) {
+			args.push('-metadata', `lyrics=${metadata.lyrics}`);
 		}
 	}
 
@@ -315,6 +332,158 @@ export function mergeMetadata(
 		album: basic.album,
 		trackNumber: basic.trackNumber
 	};
+}
+
+/**
+ * Save lyrics as sidecar files (.txt for plain, .lrc for synced)
+ */
+export async function saveLyricsSidecar(
+	audioFilePath: string,
+	plainLyrics: string | null,
+	syncedLyrics: string | null
+): Promise<void> {
+	const dir = path.dirname(audioFilePath);
+	const base = path.basename(audioFilePath, path.extname(audioFilePath));
+
+	// Save plain text lyrics
+	if (plainLyrics) {
+		const txtPath = path.join(dir, `${base}.txt`);
+		await writeFile(txtPath, plainLyrics, 'utf-8');
+	}
+
+	// Save synced lyrics (LRC format)
+	if (syncedLyrics) {
+		const lrcPath = path.join(dir, `${base}.lrc`);
+		await writeFile(lrcPath, syncedLyrics, 'utf-8');
+	}
+}
+
+/**
+ * Load lyrics from sidecar files
+ */
+export async function loadLyricsSidecar(
+	audioFilePath: string
+): Promise<{ plain: string | null; synced: string | null }> {
+	const dir = path.dirname(audioFilePath);
+	const base = path.basename(audioFilePath, path.extname(audioFilePath));
+
+	let plain = null;
+	let synced = null;
+
+	// Try to read plain text lyrics
+	try {
+		const txtPath = path.join(dir, `${base}.txt`);
+		plain = await readFile(txtPath, 'utf-8');
+	} catch {
+		// File doesn't exist or can't be read
+	}
+
+	// Try to read synced lyrics
+	try {
+		const lrcPath = path.join(dir, `${base}.lrc`);
+		synced = await readFile(lrcPath, 'utf-8');
+	} catch {
+		// File doesn't exist or can't be read
+	}
+
+	return { plain, synced };
+}
+
+/**
+ * Enrich track metadata with MusicBrainz data
+ * Returns enriched metadata only (lyrics are separate)
+ */
+export async function enrichTrackWithMetadata(options: {
+	artist: string;
+	title: string;
+	isrc?: string;
+}): Promise<import('./musicbrainz-client').EnrichedMetadata | null> {
+	const { artist, title, isrc } = options;
+
+	// Fetch MusicBrainz metadata
+	let enrichedMetadata = null;
+	try {
+		const { enrichTrackMetadata } = await import('./musicbrainz-client');
+		enrichedMetadata = await enrichTrackMetadata(isrc, artist, title);
+
+		if (enrichedMetadata) {
+			console.log(
+				`[Enrich] Found MusicBrainz data for "${title}" (confidence: ${(enrichedMetadata.matchConfidence || 1) * 100}%)`
+			);
+		}
+	} catch (enrichError) {
+		console.warn(`[Enrich] Failed to fetch MusicBrainz metadata for "${title}":`, enrichError);
+	}
+
+	return enrichedMetadata;
+}
+
+/**
+ * Fetch and save lyrics for a track (separate from metadata enrichment)
+ */
+export async function fetchAndSaveLyrics(options: {
+	trackPath: string;
+	artist: string;
+	title: string;
+	album?: string;
+	duration?: number;
+}): Promise<{ plain: string | null; synced: string | null } | null> {
+	const { trackPath, artist, title, album, duration } = options;
+
+	console.log(`[Lyrics] Fetching lyrics for: "${title}" by "${artist}"`);
+
+	try {
+		const { fetchLyrics } = await import('./lrclib-client');
+		const lyricsData = await fetchLyrics({
+			artist,
+			title,
+			album,
+			duration
+		});
+
+		if (lyricsData && (lyricsData.plain || lyricsData.synced)) {
+			console.log(`[Lyrics] ✓ Found lyrics for: ${title}`);
+
+			// Save sidecar files
+			await saveLyricsSidecar(trackPath, lyricsData.plain, lyricsData.synced);
+			console.log(`[Lyrics] ✓ Saved sidecar files`);
+
+			// Also embed in audio file if possible
+			try {
+				// Read existing metadata
+				const { parseFile } = await import('music-metadata');
+				const metadata = await parseFile(trackPath, { duration: false, skipCovers: true });
+
+				// Load existing metadata JSON to preserve all fields
+				const existingMetadata = await loadMetadataJSON(trackPath);
+
+				const updatedMetadata: TrackMetadata = {
+					...existingMetadata,
+					title: metadata.common.title || title,
+					artist: metadata.common.artist || artist,
+					album: metadata.common.album || 'Unknown Album',
+					trackNumber: metadata.common.track.no || 1,
+					lyrics: lyricsData.plain || undefined,
+					syncedLyrics: lyricsData.synced || undefined
+				};
+
+				// Re-embed with lyrics
+				await embedMetadata(trackPath, updatedMetadata);
+				await saveMetadataJSON(trackPath, updatedMetadata);
+				console.log(`[Lyrics] ✓ Embedded in audio file`);
+			} catch (embedError) {
+				console.warn(`[Lyrics] Failed to embed in audio file:`, embedError);
+			}
+
+			return lyricsData;
+		} else {
+			console.log(`[Lyrics] ✗ No lyrics found for: ${title}`);
+			return null;
+		}
+	} catch (error) {
+		console.error(`[Lyrics] Error fetching lyrics for "${title}":`, error);
+		return null;
+	}
 }
 
 /**

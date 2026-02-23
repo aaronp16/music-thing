@@ -16,12 +16,14 @@ export interface LibraryTrack {
 	path: string;
 	format: string; // 'flac', 'm4a', etc.
 	quality: string; // 'LOSSLESS', 'HI_RES', 'HIGH', 'LOW', or custom like '320kbps'
+	size: number; // File size in bytes
 }
 
 export interface LibraryDisk {
 	name: string; // 'Disk 1', 'Disk 2', etc.
 	path: string;
 	tracks: LibraryTrack[];
+	totalSize: number; // Total size in bytes
 }
 
 export interface LibraryAlbum {
@@ -29,6 +31,7 @@ export interface LibraryAlbum {
 	path: string;
 	disks: LibraryDisk[];
 	hasCover: boolean;
+	totalSize: number; // Total size in bytes
 }
 
 export interface LibraryArtist {
@@ -36,6 +39,7 @@ export interface LibraryArtist {
 	path: string;
 	albums: LibraryAlbum[];
 	hasArtistImage: boolean;
+	totalSize: number; // Total size in bytes
 }
 
 export interface Library {
@@ -43,6 +47,7 @@ export interface Library {
 	totalArtists: number;
 	totalAlbums: number;
 	totalTracks: number;
+	totalSize: number; // Total library size in bytes
 }
 
 // =============================================================================
@@ -54,24 +59,30 @@ export interface Library {
  */
 async function getTrackQuality(filePath: string): Promise<{ format: string; quality: string }> {
 	const ext = filePath.split('.').pop()?.toLowerCase() || '';
-	
+
 	try {
 		const metadata = await parseFile(filePath, { duration: false, skipCovers: true });
 		const { sampleRate, bitsPerSample, bitrate, codec } = metadata.format;
-		
+
 		if (ext === 'flac') {
 			// FLAC: Check sample rate and bit depth
 			// HI_RES: typically 96kHz/24-bit or higher
 			// LOSSLESS: typically 44.1kHz/16-bit
 			if (sampleRate && bitsPerSample) {
 				if (sampleRate > 48000 || bitsPerSample > 16) {
-					return { format: 'FLAC', quality: `${bitsPerSample}bit/${Math.round(sampleRate / 1000)}kHz` };
+					return {
+						format: 'FLAC',
+						quality: `${bitsPerSample}bit/${Math.round(sampleRate / 1000)}kHz`
+					};
 				}
-				return { format: 'FLAC', quality: `${bitsPerSample}bit/${(sampleRate / 1000).toFixed(1)}kHz` };
+				return {
+					format: 'FLAC',
+					quality: `${bitsPerSample}bit/${(sampleRate / 1000).toFixed(1)}kHz`
+				};
 			}
 			return { format: 'FLAC', quality: 'Lossless' };
 		}
-		
+
 		if (ext === 'm4a' || codec?.toLowerCase().includes('aac')) {
 			// M4A/AAC: Check bitrate
 			// HIGH: ~320kbps
@@ -88,14 +99,14 @@ async function getTrackQuality(filePath: string): Promise<{ format: string; qual
 			}
 			return { format: 'AAC', quality: 'Lossy' };
 		}
-		
+
 		if (ext === 'mp3') {
 			if (bitrate) {
 				return { format: 'MP3', quality: `${Math.round(bitrate / 1000)}kbps` };
 			}
 			return { format: 'MP3', quality: 'Lossy' };
 		}
-		
+
 		return { format: ext.toUpperCase(), quality: 'Unknown' };
 	} catch {
 		// If metadata parsing fails, just return basic info
@@ -141,10 +152,11 @@ export async function scanLibrary(): Promise<Library> {
 	const artists: LibraryArtist[] = [];
 	let totalAlbums = 0;
 	let totalTracks = 0;
+	let totalSize = 0;
 
 	// Check if music directory exists
 	if (!(await isDirectory(musicDir))) {
-		return { artists: [], totalArtists: 0, totalAlbums: 0, totalTracks: 0 };
+		return { artists: [], totalArtists: 0, totalAlbums: 0, totalTracks: 0, totalSize: 0 };
 	}
 
 	// Read artist directories
@@ -161,7 +173,8 @@ export async function scanLibrary(): Promise<Library> {
 			name: artistName,
 			path: artistPath,
 			albums: [],
-			hasArtistImage: await fileExists(join(artistPath, 'artist.jpg'))
+			hasArtistImage: await fileExists(join(artistPath, 'artist.jpg')),
+			totalSize: 0
 		};
 
 		// Read album directories
@@ -178,13 +191,14 @@ export async function scanLibrary(): Promise<Library> {
 				name: albumName,
 				path: albumPath,
 				disks: [],
-				hasCover: await fileExists(join(albumPath, 'cover.jpg'))
+				hasCover: await fileExists(join(albumPath, 'cover.jpg')),
+				totalSize: 0
 			};
 
 			// Check for disk folders (Disk 1, Disk 2, etc.)
 			const albumContents = await readdir(albumPath);
-			const diskFolders = albumContents.filter(f => f.startsWith('Disk '));
-			
+			const diskFolders = albumContents.filter((f) => f.startsWith('Disk '));
+
 			if (diskFolders.length > 0) {
 				// Multi-disk album
 				for (const diskName of diskFolders.sort()) {
@@ -194,26 +208,37 @@ export async function scanLibrary(): Promise<Library> {
 					const disk: LibraryDisk = {
 						name: diskName,
 						path: diskPath,
-						tracks: []
+						tracks: [],
+						totalSize: 0
 					};
 
 					const files = await readdir(diskPath);
 					for (const fileName of files.sort()) {
-						if (fileName.endsWith('.flac') || fileName.endsWith('.mp3') || fileName.endsWith('.m4a')) {
+						if (
+							fileName.endsWith('.flac') ||
+							fileName.endsWith('.mp3') ||
+							fileName.endsWith('.m4a')
+						) {
 							const trackPath = join(diskPath, fileName);
 							const { format, quality } = await getTrackQuality(trackPath);
+							const trackStat = await stat(trackPath);
+							const trackSize = trackStat.size;
+
 							disk.tracks.push({
 								name: fileName,
 								path: trackPath,
 								format,
-								quality
+								quality,
+								size: trackSize
 							});
+							disk.totalSize += trackSize;
 							totalTracks++;
 						}
 					}
 
 					if (disk.tracks.length > 0) {
 						album.disks.push(disk);
+						album.totalSize += disk.totalSize;
 					}
 				}
 			} else {
@@ -221,31 +246,43 @@ export async function scanLibrary(): Promise<Library> {
 				const disk: LibraryDisk = {
 					name: 'Disk 1',
 					path: albumPath,
-					tracks: []
+					tracks: [],
+					totalSize: 0
 				};
 
 				for (const fileName of albumContents.sort()) {
-					if (fileName.endsWith('.flac') || fileName.endsWith('.mp3') || fileName.endsWith('.m4a')) {
+					if (
+						fileName.endsWith('.flac') ||
+						fileName.endsWith('.mp3') ||
+						fileName.endsWith('.m4a')
+					) {
 						const trackPath = join(albumPath, fileName);
 						const { format, quality } = await getTrackQuality(trackPath);
+						const trackStat = await stat(trackPath);
+						const trackSize = trackStat.size;
+
 						disk.tracks.push({
 							name: fileName,
 							path: trackPath,
 							format,
-							quality
+							quality,
+							size: trackSize
 						});
+						disk.totalSize += trackSize;
 						totalTracks++;
 					}
 				}
 
 				if (disk.tracks.length > 0) {
 					album.disks.push(disk);
+					album.totalSize += disk.totalSize;
 				}
 			}
 
 			// Only include albums with tracks
 			if (album.disks.length > 0) {
 				artist.albums.push(album);
+				artist.totalSize += album.totalSize;
 				totalAlbums++;
 			}
 		}
@@ -253,6 +290,7 @@ export async function scanLibrary(): Promise<Library> {
 		// Only include artists with albums
 		if (artist.albums.length > 0) {
 			artists.push(artist);
+			totalSize += artist.totalSize;
 		}
 	}
 
@@ -260,6 +298,7 @@ export async function scanLibrary(): Promise<Library> {
 		artists,
 		totalArtists: artists.length,
 		totalAlbums,
-		totalTracks
+		totalTracks,
+		totalSize
 	};
 }

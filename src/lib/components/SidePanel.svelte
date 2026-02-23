@@ -2,6 +2,9 @@
 	import { slide } from 'svelte/transition';
 	import { downloadItems, downloads, hasActiveDownloads } from '$lib/stores/downloads';
 	import type { DownloadItem } from '$lib/stores/downloads';
+	import TrackStatusBadges from '$lib/components/TrackStatusBadges.svelte';
+	import PillButton from '$lib/components/PillButton.svelte';
+	import { formatFileSize } from '$lib/utils/formatFileSize';
 
 	// ==========================================================================
 	// Props
@@ -10,6 +13,7 @@
 	interface Props {
 		onArtistClick?: (artistId: number, artistName: string) => void;
 		onTrackMetadataClick?: (trackPath: string) => void;
+		onTrackLyricsClick?: (trackPath: string) => void;
 		forcedTab?: 'library' | 'downloads';
 		hideTabBar?: boolean;
 		showLargeTitle?: boolean;
@@ -19,6 +23,7 @@
 	let {
 		onArtistClick,
 		onTrackMetadataClick,
+		onTrackLyricsClick,
 		forcedTab,
 		hideTabBar = false,
 		showLargeTitle = false,
@@ -34,12 +39,14 @@
 		path: string;
 		format: string;
 		quality: string;
+		size: number;
 	}
 
 	interface LibraryDisk {
 		name: string;
 		path: string;
 		tracks: LibraryTrack[];
+		totalSize: number;
 	}
 
 	interface LibraryAlbum {
@@ -47,6 +54,7 @@
 		path: string;
 		disks: LibraryDisk[];
 		hasCover: boolean;
+		totalSize: number;
 	}
 
 	interface LibraryArtist {
@@ -54,6 +62,7 @@
 		path: string;
 		albums: LibraryAlbum[];
 		hasArtistImage: boolean;
+		totalSize: number;
 	}
 
 	interface Library {
@@ -61,6 +70,7 @@
 		totalArtists: number;
 		totalAlbums: number;
 		totalTracks: number;
+		totalSize: number;
 	}
 
 	type Tab = 'library' | 'downloads';
@@ -96,6 +106,78 @@
 		skipped: number;
 		failed: number;
 	} | null>(null);
+
+	// Lyrics fetching state
+	let lyricsRunning = $state(false);
+	let lyricsProgress = $state<{
+		current: number;
+		total: number;
+		track?: string;
+		found: number;
+		skipped: number;
+		failed: number;
+	} | null>(null);
+
+	// ==========================================================================
+	// Fetch All Lyrics
+	// ==========================================================================
+
+	async function fetchAllLyrics() {
+		if (lyricsRunning) return;
+
+		lyricsRunning = true;
+		lyricsProgress = { current: 0, total: 0, found: 0, skipped: 0, failed: 0 };
+
+		try {
+			const response = await fetch('/api/library/fetch-lyrics', { method: 'POST' });
+			const reader = response.body?.getReader();
+
+			if (!reader) {
+				throw new Error('No response body');
+			}
+
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (!line.trim()) continue;
+
+					try {
+						const progress = JSON.parse(line);
+						lyricsProgress = {
+							current: progress.current,
+							total: progress.total,
+							track: progress.track,
+							found: progress.found,
+							skipped: progress.skipped,
+							failed: progress.failed
+						};
+
+						if (progress.type === 'complete') {
+							// Refresh library
+							await fetchLibrary();
+						}
+					} catch {
+						// Ignore parse errors
+					}
+				}
+			}
+		} catch (err) {
+			console.error('Lyrics fetch failed:', err);
+		} finally {
+			lyricsRunning = false;
+			lyricsProgress = null;
+		}
+	}
 
 	// ==========================================================================
 	// Enrich All Metadata (includes artist images + MusicBrainz data)
@@ -417,11 +499,32 @@
 							{/if}
 						</span>
 						{#if !searchQuery.trim()}
-							{#if enrichRunning && enrichProgress}
+							{#if lyricsRunning && lyricsProgress}
+								<div class="flex flex-col items-end gap-1">
+									<span class="text-sm text-purple-400">
+										Downloading Lyrics {lyricsProgress.current}/{lyricsProgress.total}...
+									</span>
+									<div class="flex gap-3 text-xs text-neutral-500">
+										<span>Found: {lyricsProgress.found}</span>
+										<span>Skipped: {lyricsProgress.skipped}</span>
+										<span>Failed: {lyricsProgress.failed}</span>
+									</div>
+									{#if lyricsProgress.track}
+										<span class="max-w-[200px] truncate text-xs text-neutral-500">
+											{lyricsProgress.track}
+										</span>
+									{/if}
+								</div>
+							{:else if enrichRunning && enrichProgress}
 								<div class="flex flex-col items-end gap-1">
 									<span class="text-sm text-blue-400">
-										Enriching {enrichProgress.current}/{enrichProgress.total}...
+										Downloading Metadata {enrichProgress.current}/{enrichProgress.total}...
 									</span>
+									<div class="flex gap-3 text-xs text-neutral-500">
+										<span>Downloaded: {enrichProgress.enriched}</span>
+										<span>Skipped: {enrichProgress.skipped}</span>
+										<span>Failed: {enrichProgress.failed}</span>
+									</div>
 									{#if enrichProgress.track}
 										<span class="max-w-[200px] truncate text-xs text-neutral-500">
 											{enrichProgress.track}
@@ -429,26 +532,22 @@
 									{/if}
 								</div>
 							{:else}
-								<button
-									onclick={enrichAllMetadata}
-									class="rounded-full bg-neutral-800 px-3 py-1 text-sm text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-white"
-									title="Enrich all tracks with metadata from MusicBrainz"
-								>
-									<svg
-										class="mr-1 inline-block h-4 w-4"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
+								<div class="flex items-center gap-2">
+									<PillButton
+										onclick={fetchAllLyrics}
+										variant="purple"
+										title="Download lyrics for all tracks that don't have lyrics"
 									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-										/>
-									</svg>
-									Enrich Metadata
-								</button>
+										Lyrics
+									</PillButton>
+									<PillButton
+										onclick={enrichAllMetadata}
+										variant="blue"
+										title="Download metadata from MusicBrainz for all tracks"
+									>
+										Metadata
+									</PillButton>
+								</div>
 							{/if}
 						{/if}
 					</div>
@@ -576,7 +675,9 @@
 										</div>
 									{/if}
 									<span class="flex-1 truncate text-sm font-medium text-white">{artist.name}</span>
-									<span class="text-xs text-neutral-500">{artist.albums.length}</span>
+									<span class="text-xs text-neutral-500">
+										{formatFileSize(artist.totalSize)}
+									</span>
 								</button>
 
 								{#if expandedArtists.has(artist.name)}
@@ -633,7 +734,7 @@
 													{/if}
 													<span class="flex-1 truncate text-sm text-neutral-300">{album.name}</span>
 													<span class="text-xs text-neutral-500">
-														{trackCount}
+														{formatFileSize(album.totalSize)}
 													</span>
 												</button>
 
@@ -664,27 +765,11 @@
 																	<span class="flex-1 truncate"
 																		>{track.name.replace(/\.(flac|m4a|mp3|wav|ogg)$/i, '')}</span
 																	>
-																	{#if onTrackMetadataClick}
-																		<button
-																			onclick={() => onTrackMetadataClick?.(track.path)}
-																			class="invisible rounded p-1 text-neutral-500 group-hover/track:visible hover:bg-neutral-700 hover:text-blue-400"
-																			title="View metadata"
-																		>
-																			<svg
-																				class="h-3.5 w-3.5"
-																				fill="none"
-																				stroke="currentColor"
-																				viewBox="0 0 24 24"
-																			>
-																				<path
-																					stroke-linecap="round"
-																					stroke-linejoin="round"
-																					stroke-width="2"
-																					d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-																				/>
-																			</svg>
-																		</button>
-																	{/if}
+																	<TrackStatusBadges
+																		trackPath={track.path}
+																		onMetadataClick={() => onTrackMetadataClick?.(track.path)}
+																		onLyricsClick={() => onTrackLyricsClick?.(track.path)}
+																	/>
 																	<span
 																		class="rounded px-1.5 py-0.5 text-[10px] font-medium {track.format ===
 																		'FLAC'
@@ -697,6 +782,9 @@
 																	>
 																		{track.format}
 																	</span>
+																	<span class="text-xs text-neutral-600"
+																		>{formatFileSize(track.size)}</span
+																	>
 																</div>
 															{/each}
 														{/each}

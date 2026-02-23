@@ -22,7 +22,7 @@ interface LibraryIndexState {
  * Sanitize name to match how files are saved (same as server)
  */
 function sanitize(name: string): string {
-	return name.replace(/[<>:"/\\|?*]/g, '_').trim();
+	return name.replace(/[<>:"/\\|*]/g, '_').trim();
 }
 
 /**
@@ -50,7 +50,7 @@ function createLibraryIndexStore() {
 		 * Load the library index from the server
 		 */
 		load: async () => {
-			update(state => ({ ...state, loading: true }));
+			update((state) => ({ ...state, loading: true }));
 
 			try {
 				const response = await fetch('/api/library/index');
@@ -66,7 +66,7 @@ function createLibraryIndexStore() {
 				});
 			} catch (error) {
 				console.error('Failed to load library index:', error);
-				update(state => ({ ...state, loading: false }));
+				update((state) => ({ ...state, loading: false }));
 			}
 		},
 
@@ -105,7 +105,11 @@ function createLibraryIndexStore() {
 		 * Get library status for an album
 		 * Returns: { inLibrary: number, total: number, complete: boolean }
 		 */
-		getAlbumStatus: (artist: string, album: string, trackTitles: string[]): { inLibrary: number; total: number; complete: boolean } => {
+		getAlbumStatus: (
+			artist: string,
+			album: string,
+			trackTitles: string[]
+		): { inLibrary: number; total: number; complete: boolean } => {
 			const state = get({ subscribe });
 			let inLibrary = 0;
 
@@ -134,9 +138,9 @@ export const libraryIndex = createLibraryIndexStore();
 /**
  * Whether the library index has been loaded
  */
-export const libraryIndexLoaded = derived(libraryIndex, $index => $index.loaded);
+export const libraryIndexLoaded = derived(libraryIndex, ($index) => $index.loaded);
 
 /**
  * Whether the library index is loading
  */
-export const libraryIndexLoading = derived(libraryIndex, $index => $index.loading);
+export const libraryIndexLoading = derived(libraryIndex, ($index) => $index.loading);

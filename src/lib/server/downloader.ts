@@ -17,8 +17,13 @@ import {
 	type AlbumWithTracks,
 	type Quality as HifiQuality
 } from './hifi-client';
-import { embedMetadata, extractMetadata, saveMetadataJSON, mergeMetadata } from './metadata';
-import { enrichTrackMetadata } from './musicbrainz-client';
+import {
+	embedMetadata,
+	extractMetadata,
+	saveMetadataJSON,
+	mergeMetadata,
+	enrichTrackWithMetadata
+} from './metadata';
 import { QUALITY_OPTIONS, DEFAULT_QUALITY, type Quality } from '$lib/types';
 
 // =============================================================================
@@ -65,7 +70,7 @@ const progressListeners = new Map<string, Set<(progress: DownloadProgress) => vo
  * Sanitize filename/folder name
  */
 function sanitize(name: string): string {
-	return name.replace(/[<>:"/\\|?*]/g, '_').trim();
+	return name.replace(/[<>:"/\\|*]/g, '_').trim();
 }
 
 /**
@@ -324,21 +329,15 @@ async function downloadTrack(
 			writer.on('error', reject);
 		});
 
-		// Fetch extended metadata from MusicBrainz
-		let enrichedMetadata = null;
-		try {
-			const artistName =
-				track.artists?.map((a) => a.name).join(', ') || track.artist?.name || 'Unknown Artist';
-			enrichedMetadata = await enrichTrackMetadata(track.isrc, artistName, track.title);
+		// Fetch extended metadata (MusicBrainz only - lyrics are separate)
+		const artistName =
+			track.artists?.map((a) => a.name).join(', ') || track.artist?.name || 'Unknown Artist';
 
-			if (enrichedMetadata) {
-				console.log(
-					`Enriched metadata for: ${track.title} (confidence: ${(enrichedMetadata.matchConfidence || 1) * 100}%)`
-				);
-			}
-		} catch (enrichError) {
-			console.warn('Failed to fetch extended metadata from MusicBrainz:', enrichError);
-		}
+		const enrichedMetadata = await enrichTrackWithMetadata({
+			artist: artistName,
+			title: track.title,
+			isrc: track.isrc
+		});
 
 		// Embed metadata (basic + enriched) into audio file
 		try {
@@ -366,6 +365,8 @@ async function downloadTrack(
 			// Move file (copy + delete for cross-device)
 			await moveFile(tempFilePath, actualFilePath);
 		}
+
+		// Note: Lyrics are no longer fetched during download - use separate "Fetch Lyrics" button
 
 		progressState.status = 'complete';
 		progressState.progress = 100;

@@ -12,7 +12,7 @@ import { env } from '$lib/server/env';
  * Sanitize name to match how files are saved
  */
 function sanitize(name: string): string {
-	return name.replace(/[<>:"/\\|?*]/g, '_').trim();
+	return name.replace(/[<>:"/\\|*]/g, '_').trim();
 }
 
 /**
@@ -39,7 +39,7 @@ function makeTrackKey(artist: string, album: string, diskNum: number, trackName:
 		.replace(/\.(flac|m4a|mp3|wav|ogg)$/i, '') // Remove extension
 		.toLowerCase()
 		.trim();
-	
+
 	return `${artist.toLowerCase()}|${album.toLowerCase()}|${diskNum}|${cleanTrackName}`;
 }
 
@@ -67,34 +67,42 @@ export const GET: RequestHandler = async () => {
 				if (!(await isDirectory(albumPath))) continue;
 
 				const albumContents = await readdir(albumPath);
-				
+
 				// Check for disk folders
-				const diskFolders = albumContents.filter(f => f.startsWith('Disk '));
-				
-			if (diskFolders.length > 0) {
-				// Multi-disk album - scan each disk folder
-				for (const diskName of diskFolders) {
-					const diskPath = join(albumPath, diskName);
-					if (!(await isDirectory(diskPath))) continue;
+				const diskFolders = albumContents.filter((f) => f.startsWith('Disk '));
 
-					// Extract disk number from folder name (e.g., "Disk 1" -> 1)
-					const diskNum = parseInt(diskName.replace('Disk ', ''), 10) || 1;
+				if (diskFolders.length > 0) {
+					// Multi-disk album - scan each disk folder
+					for (const diskName of diskFolders) {
+						const diskPath = join(albumPath, diskName);
+						if (!(await isDirectory(diskPath))) continue;
 
-					const files = await readdir(diskPath);
-					for (const fileName of files) {
-						if (fileName.endsWith('.flac') || fileName.endsWith('.mp3') || fileName.endsWith('.m4a')) {
-							tracks.push(makeTrackKey(artistName, albumName, diskNum, fileName));
+						// Extract disk number from folder name (e.g., "Disk 1" -> 1)
+						const diskNum = parseInt(diskName.replace('Disk ', ''), 10) || 1;
+
+						const files = await readdir(diskPath);
+						for (const fileName of files) {
+							if (
+								fileName.endsWith('.flac') ||
+								fileName.endsWith('.mp3') ||
+								fileName.endsWith('.m4a')
+							) {
+								tracks.push(makeTrackKey(artistName, albumName, diskNum, fileName));
+							}
+						}
+					}
+				} else {
+					// Single disk - use disk 0
+					for (const fileName of albumContents) {
+						if (
+							fileName.endsWith('.flac') ||
+							fileName.endsWith('.mp3') ||
+							fileName.endsWith('.m4a')
+						) {
+							tracks.push(makeTrackKey(artistName, albumName, 0, fileName));
 						}
 					}
 				}
-			} else {
-				// Single disk - use disk 0
-				for (const fileName of albumContents) {
-					if (fileName.endsWith('.flac') || fileName.endsWith('.mp3') || fileName.endsWith('.m4a')) {
-						tracks.push(makeTrackKey(artistName, albumName, 0, fileName));
-					}
-				}
-			}
 			}
 		}
 

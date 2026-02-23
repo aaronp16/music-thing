@@ -29,6 +29,9 @@
 	// Subscribe to library index
 	const libraryState = $derived($libraryIndex);
 
+	// Get artists array (data.artists or fallback to [data.artist] if available)
+	const artists = $derived(data?.artists || (data?.artist ? [data.artist] : []));
+
 	$effect(() => {
 		loadAlbum(albumId);
 	});
@@ -346,7 +349,7 @@
 						<div
 							class="flex flex-wrap items-center justify-center gap-1 text-sm text-neutral-300 sm:justify-start sm:text-base"
 						>
-							{#each data.artists || (data.artist ? [data.artist] : []) as artist, i}
+							{#each artists as artist, i}
 								{#if i > 0}<span class="text-neutral-500">,&nbsp;</span>{/if}
 								<button
 									type="button"

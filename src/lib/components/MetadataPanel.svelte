@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PillButton from './PillButton.svelte';
+
 	interface Props {
 		isOpen: boolean;
 		trackPath: string | null;
@@ -63,11 +65,11 @@
 			const result = await response.json();
 
 			if (result.enriched) {
-				enrichMessage = `Enriched with ${result.confidence.toFixed(0)}% confidence`;
+				enrichMessage = `Downloaded with ${result.confidence.toFixed(0)}% confidence`;
 				// Reload metadata to show updated data
 				await loadMetadata(trackPath);
 			} else {
-				enrichMessage = result.message || 'No MusicBrainz match found';
+				enrichMessage = result.message || 'No metadata found';
 			}
 
 			// Clear message after 3 seconds
@@ -136,34 +138,15 @@
 	<div class="flex items-center justify-between border-b border-neutral-800 px-6 py-4">
 		<h2 class="text-xl font-bold text-white">Track Metadata</h2>
 		<div class="flex items-center gap-2">
-			<button
+			<PillButton
 				onclick={enrichMetadata}
 				disabled={enriching || loading}
-				class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-				title="Fetch metadata from MusicBrainz"
+				loading={enriching}
+				variant="blue"
+				title="Download metadata from MusicBrainz"
 			>
-				{#if enriching}
-					<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
-						></circle>
-						<path
-							class="opacity-75"
-							fill="currentColor"
-							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-						></path>
-					</svg>
-				{:else}
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-						/>
-					</svg>
-				{/if}
-				<span>{enriching ? 'Enriching...' : 'Refetch Metadata'}</span>
-			</button>
+				Metadata
+			</PillButton>
 			<button
 				onclick={handleClose}
 				class="rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
@@ -353,24 +336,6 @@
 								</div>
 							{/if}
 						</dl>
-					</section>
-				{/if}
-
-				<!-- Genres -->
-				{#if metadata.embedded.genres && metadata.embedded.genres.length > 0}
-					<section>
-						<h3 class="mb-3 text-sm font-semibold tracking-wider text-neutral-400 uppercase">
-							Genres & Styles
-						</h3>
-						<div class="flex flex-wrap gap-2">
-							{#each metadata.embedded.genres as genre}
-								<span
-									class="rounded-full bg-neutral-800 px-3 py-1 text-sm font-medium text-neutral-300"
-								>
-									{genre}
-								</span>
-							{/each}
-						</div>
 					</section>
 				{/if}
 

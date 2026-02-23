@@ -7,13 +7,13 @@
 
 import type { RequestHandler } from './$types';
 import { scanLibrary } from '$lib/server/library';
-import { enrichTrackMetadata } from '$lib/server/musicbrainz-client';
 import {
 	loadMetadataJSON,
 	saveMetadataJSON,
 	embedMetadata,
 	mergeMetadata,
-	extractMetadata
+	extractMetadata,
+	enrichTrackWithMetadata
 } from '$lib/server/metadata';
 import { parseFile } from 'music-metadata';
 import { access, constants } from 'fs/promises';
@@ -146,20 +146,22 @@ export const POST: RequestHandler = async () => {
 					});
 
 					try {
-						// Fetch enriched metadata from MusicBrainz
-						const enrichedData = await enrichTrackMetadata(
-							basicInfo.isrc,
-							basicInfo.artist,
-							basicInfo.title
-						);
+						// Read current embedded metadata to preserve basic fields
+						const fileMetadata = await parseFile(trackPath, { duration: false, skipCovers: true });
 
+						// Fetch extended metadata (MusicBrainz only - lyrics are separate)
+						const enrichedData = await enrichTrackWithMetadata({
+							artist: basicInfo.artist,
+							title: basicInfo.title,
+							isrc: basicInfo.isrc
+						});
+
+						// Skip if no enrichment data found
 						if (!enrichedData) {
 							failed++;
 							continue;
 						}
 
-						// Read current embedded metadata to preserve basic fields
-						const fileMetadata = await parseFile(trackPath, { duration: false, skipCovers: true });
 						const basicMetadata = {
 							title: fileMetadata.common.title || basicInfo.title,
 							artist: fileMetadata.common.artist || basicInfo.artist,

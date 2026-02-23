@@ -1,7 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { enrichTrackMetadata } from '$lib/server/musicbrainz-client';
-import { embedMetadata, saveMetadataJSON, mergeMetadata } from '$lib/server/metadata';
+import {
+	embedMetadata,
+	saveMetadataJSON,
+	mergeMetadata,
+	enrichTrackWithMetadata
+} from '$lib/server/metadata';
 import * as mm from 'music-metadata';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -24,57 +28,50 @@ export const POST: RequestHandler = async ({ request }) => {
 			`[Enrich Single] Searching for: "${title}" by "${artist}"${isrc ? ` (ISRC: ${isrc})` : ''}`
 		);
 
-		// Fetch enriched metadata from MusicBrainz
-		const enrichedData = await enrichTrackMetadata(isrc, artist, title);
+		// Fetch extended metadata (MusicBrainz only - lyrics are separate)
+		const enrichedData = await enrichTrackWithMetadata({
+			artist,
+			title,
+			isrc
+		});
 
-		if (enrichedData) {
-			const confidence = (enrichedData.matchConfidence || 1) * 100;
-			console.log(`[Enrich Single] Found MusicBrainz data (confidence: ${confidence.toFixed(0)}%)`);
-			console.log(`[Enrich Single] Enriched data:`, JSON.stringify(enrichedData, null, 2));
+		// Prepare basic metadata for merging
+		const basicMetadata = {
+			title,
+			artist,
+			albumArtist: metadata.common.albumartist || artist,
+			album: metadata.common.album || 'Unknown Album',
+			year: metadata.common.year?.toString() || metadata.common.date?.split('-')[0],
+			trackNumber: metadata.common.track.no || 1,
+			discNumber: metadata.common.disk.no || undefined,
+			isrc
+		};
 
-			// Prepare basic metadata for merging
-			const basicMetadata = {
-				title,
-				artist,
-				albumArtist: metadata.common.albumartist || artist,
-				album: metadata.common.album || 'Unknown Album',
-				year: metadata.common.year?.toString() || metadata.common.date?.split('-')[0],
-				trackNumber: metadata.common.track.no || 1,
-				discNumber: metadata.common.disk.no || undefined,
-				isrc
-			};
+		// Merge basic + enriched metadata
+		const fullMetadata = mergeMetadata(basicMetadata, enrichedData);
 
-			// Merge basic + enriched metadata
-			const fullMetadata = mergeMetadata(basicMetadata, enrichedData);
-
-			// Extract year from releaseDate if year is still missing
-			if (!fullMetadata.year && fullMetadata.releaseDate) {
-				fullMetadata.year = fullMetadata.releaseDate.split('-')[0];
-			}
-
-			console.log(`[Enrich Single] Final merged metadata:`, JSON.stringify(fullMetadata, null, 2));
-
-			// Save to JSON sidecar
-			await saveMetadataJSON(trackPath, fullMetadata);
-			console.log(`[Enrich Single] Saved metadata JSON`);
-
-			// Re-embed in FLAC
-			await embedMetadata(trackPath, fullMetadata);
-			console.log(`[Enrich Single] Re-embedded FLAC tags`);
-
-			return json({
-				success: true,
-				enriched: true,
-				confidence: confidence
-			});
-		} else {
-			console.log(`[Enrich Single] No MusicBrainz match found`);
-			return json({
-				success: true,
-				enriched: false,
-				message: 'No MusicBrainz match found'
-			});
+		// Extract year from releaseDate if year is still missing
+		if (!fullMetadata.year && fullMetadata.releaseDate) {
+			fullMetadata.year = fullMetadata.releaseDate.split('-')[0];
 		}
+
+		console.log(`[Enrich Single] Final merged metadata:`, JSON.stringify(fullMetadata, null, 2));
+
+		// Save to JSON sidecar
+		await saveMetadataJSON(trackPath, fullMetadata);
+		console.log(`[Enrich Single] Saved metadata JSON`);
+
+		// Re-embed in FLAC
+		await embedMetadata(trackPath, fullMetadata);
+		console.log(`[Enrich Single] Re-embedded FLAC tags`);
+
+		// Return success with enrichment status
+		return json({
+			success: true,
+			enriched: !!enrichedData,
+			confidence: enrichedData ? (enrichedData.matchConfidence || 1) * 100 : undefined,
+			message: !enrichedData ? 'No metadata found' : undefined
+		});
 	} catch (error) {
 		console.error('[Enrich Single] Error:', error);
 		return json(
