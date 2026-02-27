@@ -1,6 +1,4 @@
 <script lang="ts">
-	import PillButton from './PillButton.svelte';
-
 	interface Props {
 		isOpen: boolean;
 		trackPath: string | null;
@@ -12,17 +10,13 @@
 	let metadata = $state<any>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
-	let enriching = $state(false);
-	let enrichMessage = $state<string | null>(null);
 
-	// Fetch metadata when trackPath changes
 	$effect(() => {
 		if (trackPath && isOpen) {
 			loadMetadata(trackPath);
 		} else {
 			metadata = null;
 			error = null;
-			enrichMessage = null;
 		}
 	});
 
@@ -42,44 +36,6 @@
 			error = err instanceof Error ? err.message : 'Failed to load metadata';
 		} finally {
 			loading = false;
-		}
-	}
-
-	async function enrichMetadata() {
-		if (!trackPath || enriching) return;
-
-		enriching = true;
-		enrichMessage = null;
-
-		try {
-			const response = await fetch('/api/track/enrich', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ trackPath })
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to enrich metadata');
-			}
-
-			const result = await response.json();
-
-			if (result.enriched) {
-				enrichMessage = `Downloaded with ${result.confidence.toFixed(0)}% confidence`;
-				// Reload metadata to show updated data
-				await loadMetadata(trackPath);
-			} else {
-				enrichMessage = result.message || 'No metadata found';
-			}
-
-			// Clear message after 3 seconds
-			setTimeout(() => {
-				enrichMessage = null;
-			}, 3000);
-		} catch (err) {
-			enrichMessage = err instanceof Error ? err.message : 'Enrichment failed';
-		} finally {
-			enriching = false;
 		}
 	}
 
@@ -118,7 +74,6 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- Backdrop -->
 {#if isOpen}
 	<div
 		class="fixed inset-0 z-40 bg-black/50 transition-opacity"
@@ -128,25 +83,14 @@
 	></div>
 {/if}
 
-<!-- Panel -->
 <div
 	class="fixed top-0 right-0 bottom-0 z-50 w-full transform bg-neutral-900 shadow-2xl transition-transform duration-300 ease-in-out sm:w-[500px] md:w-[600px] {isOpen
 		? 'translate-x-0'
 		: 'translate-x-full'}"
 >
-	<!-- Header -->
 	<div class="flex items-center justify-between border-b border-neutral-800 px-6 py-4">
 		<h2 class="text-xl font-bold text-white">Track Metadata</h2>
 		<div class="flex items-center gap-2">
-			<PillButton
-				onclick={enrichMetadata}
-				disabled={enriching || loading}
-				loading={enriching}
-				variant="blue"
-				title="Download metadata from MusicBrainz"
-			>
-				Metadata
-			</PillButton>
 			<button
 				onclick={handleClose}
 				class="rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
@@ -164,16 +108,6 @@
 		</div>
 	</div>
 
-	<!-- Enrichment Message Toast -->
-	{#if enrichMessage}
-		<div class="animate-fade-in absolute top-20 right-6 left-6 z-10">
-			<div class="rounded-lg bg-blue-900/90 px-4 py-3 text-center text-sm text-blue-100 shadow-lg">
-				{enrichMessage}
-			</div>
-		</div>
-	{/if}
-
-	<!-- Content -->
 	<div class="h-full overflow-y-auto pb-20">
 		{#if loading}
 			<div class="flex items-center justify-center py-16">
@@ -195,7 +129,6 @@
 			</div>
 		{:else if metadata}
 			<div class="space-y-6 p-6">
-				<!-- Basic Information -->
 				<section>
 					<h3 class="mb-3 text-sm font-semibold tracking-wider text-neutral-400 uppercase">
 						Basic Information
@@ -236,16 +169,12 @@
 						<div class="flex justify-between">
 							<dt class="text-neutral-500">Year</dt>
 							<dd class="text-right font-medium text-white">
-								{metadata.embedded.year ||
-									metadata.embedded.date?.split('-')[0] ||
-									metadata.sidecar?.year ||
-									'N/A'}
+								{metadata.embedded.year || metadata.embedded.date?.split('-')[0] || 'N/A'}
 							</dd>
 						</div>
 					</dl>
 				</section>
 
-				<!-- Release Information -->
 				<section>
 					<h3 class="mb-3 text-sm font-semibold tracking-wider text-neutral-400 uppercase">
 						Release Information
@@ -254,49 +183,48 @@
 						<div class="flex justify-between">
 							<dt class="text-neutral-500">Label</dt>
 							<dd class="text-right font-medium text-white">
-								{metadata.embedded.label || metadata.sidecar?.label || 'N/A'}
+								{metadata.embedded.label || 'N/A'}
 							</dd>
 						</div>
 						<div class="flex justify-between">
 							<dt class="text-neutral-500">Catalog #</dt>
 							<dd class="text-right font-medium text-white">
-								{metadata.embedded.catalogNumber || metadata.sidecar?.catalogNumber || 'N/A'}
+								{metadata.embedded.catalogNumber || 'N/A'}
 							</dd>
 						</div>
 						<div class="flex justify-between">
 							<dt class="text-neutral-500">Release Date</dt>
 							<dd class="text-right font-medium text-white">
-								{formatDate(metadata.embedded.releaseDate || metadata.sidecar?.releaseDate)}
+								{formatDate(metadata.embedded.releaseDate)}
 							</dd>
 						</div>
 						<div class="flex justify-between">
 							<dt class="text-neutral-500">Original Date</dt>
 							<dd class="text-right font-medium text-white">
-								{formatDate(metadata.embedded.originalDate || metadata.sidecar?.originalDate)}
+								{formatDate(metadata.embedded.originalDate)}
 							</dd>
 						</div>
 						<div class="flex justify-between">
 							<dt class="text-neutral-500">Country</dt>
 							<dd class="text-right font-medium text-white">
-								{metadata.embedded.releaseCountry || metadata.sidecar?.releaseCountry || 'N/A'}
+								{metadata.embedded.releaseCountry || 'N/A'}
 							</dd>
 						</div>
 						<div class="flex justify-between">
 							<dt class="text-neutral-500">ISRC</dt>
 							<dd class="text-right font-mono text-sm text-white">
-								{metadata.embedded.isrc || metadata.sidecar?.isrc || 'N/A'}
+								{metadata.embedded.isrc || 'N/A'}
 							</dd>
 						</div>
 						<div class="flex justify-between">
 							<dt class="text-neutral-500">Barcode</dt>
 							<dd class="text-right font-mono text-sm text-white">
-								{metadata.embedded.barcode || metadata.sidecar?.barcode || 'N/A'}
+								{metadata.embedded.barcode || 'N/A'}
 							</dd>
 						</div>
 					</dl>
 				</section>
 
-				<!-- Credits -->
 				{#if metadata.embedded.composer || metadata.embedded.lyricist || metadata.embedded.producer || metadata.embedded.engineer}
 					<section>
 						<h3 class="mb-3 text-sm font-semibold tracking-wider text-neutral-400 uppercase">
@@ -339,7 +267,6 @@
 					</section>
 				{/if}
 
-				<!-- Audio Format -->
 				<section>
 					<h3 class="mb-3 text-sm font-semibold tracking-wider text-neutral-400 uppercase">
 						Audio Format
@@ -385,87 +312,6 @@
 						</div>
 					</dl>
 				</section>
-
-				<!-- MusicBrainz Links -->
-				{#if metadata.embedded.mbid_recording || metadata.embedded.mbid_release || metadata.embedded.mbid_artist}
-					<section>
-						<h3 class="mb-3 text-sm font-semibold tracking-wider text-neutral-400 uppercase">
-							MusicBrainz
-						</h3>
-						<div class="space-y-2">
-							{#if metadata.embedded.mbid_recording}
-								<a
-									href="https://musicbrainz.org/recording/{metadata.embedded.mbid_recording}"
-									target="_blank"
-									rel="noopener noreferrer"
-									class="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
-								>
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-										/>
-									</svg>
-									View Recording
-								</a>
-							{/if}
-							{#if metadata.embedded.mbid_release}
-								<a
-									href="https://musicbrainz.org/release/{metadata.embedded.mbid_release}"
-									target="_blank"
-									rel="noopener noreferrer"
-									class="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
-								>
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-										/>
-									</svg>
-									View Release
-								</a>
-							{/if}
-							{#if metadata.embedded.mbid_artist}
-								<a
-									href="https://musicbrainz.org/artist/{metadata.embedded.mbid_artist}"
-									target="_blank"
-									rel="noopener noreferrer"
-									class="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
-								>
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-										/>
-									</svg>
-									View Artist
-								</a>
-							{/if}
-						</div>
-					</section>
-				{/if}
-
-				<!-- Enrichment Info -->
-				{#if metadata.sidecar && metadata.sidecar.enrichedAt}
-					<section class="rounded-lg bg-neutral-800/50 p-4">
-						<p class="text-sm text-neutral-400">
-							Enriched from
-							<span class="font-medium text-neutral-300">{metadata.sidecar.enrichedFrom}</span>
-							on {formatDate(metadata.sidecar.enrichedAt)}
-						</p>
-						{#if metadata.sidecar.matchConfidence !== undefined}
-							<p class="mt-1 text-sm text-neutral-500">
-								Match confidence: {Math.round(metadata.sidecar.matchConfidence * 100)}%
-							</p>
-						{/if}
-					</section>
-				{/if}
 			</div>
 		{:else}
 			<div class="flex flex-col items-center justify-center py-16 text-center">

@@ -1,29 +1,21 @@
-/**
- * Library scanner - scans the music directory and returns folder structure
- */
-
 import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
 import { env } from './env';
 import { parseFile } from 'music-metadata';
 
-// =============================================================================
-// Types
-// =============================================================================
-
 export interface LibraryTrack {
 	name: string;
 	path: string;
-	format: string; // 'flac', 'm4a', etc.
-	quality: string; // 'LOSSLESS', 'HI_RES', 'HIGH', 'LOW', or custom like '320kbps'
-	size: number; // File size in bytes
+	format: string;
+	quality: string;
+	size: number;
 }
 
 export interface LibraryDisk {
-	name: string; // 'Disk 1', 'Disk 2', etc.
+	name: string;
 	path: string;
 	tracks: LibraryTrack[];
-	totalSize: number; // Total size in bytes
+	totalSize: number;
 }
 
 export interface LibraryAlbum {
@@ -31,7 +23,7 @@ export interface LibraryAlbum {
 	path: string;
 	disks: LibraryDisk[];
 	hasCover: boolean;
-	totalSize: number; // Total size in bytes
+	totalSize: number;
 }
 
 export interface LibraryArtist {
@@ -39,7 +31,7 @@ export interface LibraryArtist {
 	path: string;
 	albums: LibraryAlbum[];
 	hasArtistImage: boolean;
-	totalSize: number; // Total size in bytes
+	totalSize: number;
 }
 
 export interface Library {
@@ -47,16 +39,9 @@ export interface Library {
 	totalArtists: number;
 	totalAlbums: number;
 	totalTracks: number;
-	totalSize: number; // Total library size in bytes
+	totalSize: number;
 }
 
-// =============================================================================
-// Quality Detection
-// =============================================================================
-
-/**
- * Determine quality label from audio metadata
- */
 async function getTrackQuality(filePath: string): Promise<{ format: string; quality: string }> {
 	const ext = filePath.split('.').pop()?.toLowerCase() || '';
 
@@ -114,13 +99,6 @@ async function getTrackQuality(filePath: string): Promise<{ format: string; qual
 	}
 }
 
-// =============================================================================
-// Scanner
-// =============================================================================
-
-/**
- * Check if a path exists and is a directory
- */
 async function isDirectory(path: string): Promise<boolean> {
 	try {
 		const s = await stat(path);
@@ -130,9 +108,6 @@ async function isDirectory(path: string): Promise<boolean> {
 	}
 }
 
-/**
- * Check if a file exists
- */
 async function fileExists(path: string): Promise<boolean> {
 	try {
 		await stat(path);
@@ -142,11 +117,6 @@ async function fileExists(path: string): Promise<boolean> {
 	}
 }
 
-/**
- * Scan the music directory and return the library structure
- * Structure: MUSIC_DIR/Artist/Album/Disk 1/01 - Track.flac
- * OR: MUSIC_DIR/Artist/Album/01 - Track.flac (single disk)
- */
 export async function scanLibrary(): Promise<Library> {
 	const musicDir = env.MUSIC_DIR;
 	const artists: LibraryArtist[] = [];

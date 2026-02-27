@@ -1,19 +1,12 @@
 <script lang="ts">
 	import { slide } from 'svelte/transition';
-	import { downloadItems, downloads, hasActiveDownloads } from '$lib/stores/downloads';
-	import type { DownloadItem } from '$lib/stores/downloads';
-	import TrackStatusBadges from '$lib/components/TrackStatusBadges.svelte';
-	import PillButton from '$lib/components/PillButton.svelte';
-	import { formatFileSize } from '$lib/utils/formatFileSize';
+	import { downloadItems } from '$lib/stores/downloads';
 
-	// ==========================================================================
-	// Props
-	// ==========================================================================
+	import { formatFileSize } from '$lib/utils/formatFileSize';
 
 	interface Props {
 		onArtistClick?: (artistId: number, artistName: string) => void;
 		onTrackMetadataClick?: (trackPath: string) => void;
-		onTrackLyricsClick?: (trackPath: string) => void;
 		forcedTab?: 'library' | 'downloads';
 		hideTabBar?: boolean;
 		showLargeTitle?: boolean;
@@ -23,16 +16,11 @@
 	let {
 		onArtistClick,
 		onTrackMetadataClick,
-		onTrackLyricsClick,
 		forcedTab,
 		hideTabBar = false,
 		showLargeTitle = false,
 		titleRight
 	}: Props = $props();
-
-	// ==========================================================================
-	// Types
-	// ==========================================================================
 
 	interface LibraryTrack {
 		name: string;
@@ -75,10 +63,6 @@
 
 	type Tab = 'library' | 'downloads';
 
-	// ==========================================================================
-	// State
-	// ==========================================================================
-
 	let activeTab = $state<Tab>('library');
 
 	// Sync with forced tab if provided
@@ -95,154 +79,6 @@
 	// Track expanded state for artists and albums
 	let expandedArtists = $state<Set<string>>(new Set());
 	let expandedAlbums = $state<Set<string>>(new Set());
-
-	// Enrichment state
-	let enrichRunning = $state(false);
-	let enrichProgress = $state<{
-		current: number;
-		total: number;
-		track?: string;
-		enriched: number;
-		skipped: number;
-		failed: number;
-	} | null>(null);
-
-	// Lyrics fetching state
-	let lyricsRunning = $state(false);
-	let lyricsProgress = $state<{
-		current: number;
-		total: number;
-		track?: string;
-		found: number;
-		skipped: number;
-		failed: number;
-	} | null>(null);
-
-	// ==========================================================================
-	// Fetch All Lyrics
-	// ==========================================================================
-
-	async function fetchAllLyrics() {
-		if (lyricsRunning) return;
-
-		lyricsRunning = true;
-		lyricsProgress = { current: 0, total: 0, found: 0, skipped: 0, failed: 0 };
-
-		try {
-			const response = await fetch('/api/library/fetch-lyrics', { method: 'POST' });
-			const reader = response.body?.getReader();
-
-			if (!reader) {
-				throw new Error('No response body');
-			}
-
-			const decoder = new TextDecoder();
-			let buffer = '';
-
-			while (true) {
-				const { done, value } = await reader.read();
-
-				if (done) break;
-
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || '';
-
-				for (const line of lines) {
-					if (!line.trim()) continue;
-
-					try {
-						const progress = JSON.parse(line);
-						lyricsProgress = {
-							current: progress.current,
-							total: progress.total,
-							track: progress.track,
-							found: progress.found,
-							skipped: progress.skipped,
-							failed: progress.failed
-						};
-
-						if (progress.type === 'complete') {
-							// Refresh library
-							await fetchLibrary();
-						}
-					} catch {
-						// Ignore parse errors
-					}
-				}
-			}
-		} catch (err) {
-			console.error('Lyrics fetch failed:', err);
-		} finally {
-			lyricsRunning = false;
-			lyricsProgress = null;
-		}
-	}
-
-	// ==========================================================================
-	// Enrich All Metadata (includes artist images + MusicBrainz data)
-	// ==========================================================================
-
-	async function enrichAllMetadata() {
-		if (enrichRunning) return;
-
-		enrichRunning = true;
-		enrichProgress = { current: 0, total: 0, enriched: 0, skipped: 0, failed: 0 };
-
-		try {
-			const response = await fetch('/api/library/enrich-metadata', { method: 'POST' });
-			const reader = response.body?.getReader();
-
-			if (!reader) {
-				throw new Error('No response body');
-			}
-
-			const decoder = new TextDecoder();
-			let buffer = '';
-
-			while (true) {
-				const { done, value } = await reader.read();
-
-				if (done) break;
-
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || '';
-
-				for (const line of lines) {
-					if (!line.trim()) continue;
-
-					try {
-						const progress = JSON.parse(line);
-						enrichProgress = {
-							current: progress.current,
-							total: progress.total,
-							track: progress.track,
-							enriched: progress.enriched,
-							skipped: progress.skipped,
-							failed: progress.failed
-						};
-
-						if (progress.type === 'complete') {
-							// Refresh library
-							await fetchLibrary();
-						}
-					} catch {
-						// Ignore parse errors
-					}
-				}
-			}
-		} catch (err) {
-			console.error('Enrichment failed:', err);
-		} finally {
-			enrichRunning = false;
-			enrichProgress = null;
-		}
-	}
-
-	// ==========================================================================
-	// Library Filtering
-	// ==========================================================================
 
 	const filteredLibrary = $derived.by(() => {
 		if (!library) return null;
@@ -329,10 +165,6 @@
 		}
 	});
 
-	// ==========================================================================
-	// Data Fetching
-	// ==========================================================================
-
 	async function fetchLibrary() {
 		loading = true;
 		error = null;
@@ -359,10 +191,6 @@
 	$effect(() => {
 		fetchLibrary();
 	});
-
-	// ==========================================================================
-	// Event Handlers
-	// ==========================================================================
 
 	function toggleArtist(artistName: string) {
 		if (expandedArtists.has(artistName)) {
@@ -498,58 +326,6 @@
 								{filteredLibrary.totalTracks} tracks
 							{/if}
 						</span>
-						{#if !searchQuery.trim()}
-							{#if lyricsRunning && lyricsProgress}
-								<div class="flex flex-col items-end gap-1">
-									<span class="text-sm text-purple-400">
-										Downloading Lyrics {lyricsProgress.current}/{lyricsProgress.total}...
-									</span>
-									<div class="flex gap-3 text-xs text-neutral-500">
-										<span>Found: {lyricsProgress.found}</span>
-										<span>Skipped: {lyricsProgress.skipped}</span>
-										<span>Failed: {lyricsProgress.failed}</span>
-									</div>
-									{#if lyricsProgress.track}
-										<span class="max-w-[200px] truncate text-xs text-neutral-500">
-											{lyricsProgress.track}
-										</span>
-									{/if}
-								</div>
-							{:else if enrichRunning && enrichProgress}
-								<div class="flex flex-col items-end gap-1">
-									<span class="text-sm text-blue-400">
-										Downloading Metadata {enrichProgress.current}/{enrichProgress.total}...
-									</span>
-									<div class="flex gap-3 text-xs text-neutral-500">
-										<span>Downloaded: {enrichProgress.enriched}</span>
-										<span>Skipped: {enrichProgress.skipped}</span>
-										<span>Failed: {enrichProgress.failed}</span>
-									</div>
-									{#if enrichProgress.track}
-										<span class="max-w-[200px] truncate text-xs text-neutral-500">
-											{enrichProgress.track}
-										</span>
-									{/if}
-								</div>
-							{:else}
-								<div class="flex items-center gap-2">
-									<PillButton
-										onclick={fetchAllLyrics}
-										variant="purple"
-										title="Download lyrics for all tracks that don't have lyrics"
-									>
-										Lyrics
-									</PillButton>
-									<PillButton
-										onclick={enrichAllMetadata}
-										variant="blue"
-										title="Download metadata from MusicBrainz for all tracks"
-									>
-										Metadata
-									</PillButton>
-								</div>
-							{/if}
-						{/if}
 					</div>
 				{/if}
 
@@ -751,7 +527,10 @@
 															{/if}
 															{#each disk.tracks as track}
 																<div
-																	class="group/track flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-neutral-400 transition-colors hover:bg-neutral-800/50"
+																	role="button"
+																	tabindex="0"
+																	onclick={() => onTrackMetadataClick?.(track.path)}
+																	class="group/track flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm text-neutral-400 transition-colors hover:bg-neutral-800/50"
 																>
 																	<svg
 																		class="h-3.5 w-3.5 flex-shrink-0 text-neutral-600"
@@ -765,11 +544,6 @@
 																	<span class="flex-1 truncate"
 																		>{track.name.replace(/\.(flac|m4a|mp3|wav|ogg)$/i, '')}</span
 																	>
-																	<TrackStatusBadges
-																		trackPath={track.path}
-																		onMetadataClick={() => onTrackMetadataClick?.(track.path)}
-																		onLyricsClick={() => onTrackLyricsClick?.(track.path)}
-																	/>
 																	<span
 																		class="rounded px-1.5 py-0.5 text-[10px] font-medium {track.format ===
 																		'FLAC'

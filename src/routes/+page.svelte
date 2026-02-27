@@ -10,7 +10,6 @@
 	import DownloadsHeaderIndicator from '$lib/components/DownloadsHeaderIndicator.svelte';
 	import DownloadsModal from '$lib/components/DownloadsModal.svelte';
 	import MetadataPanel from '$lib/components/MetadataPanel.svelte';
-	import LyricsPanel from '$lib/components/LyricsPanel.svelte';
 	import type { Track, Album, Artist, SearchResult, Quality } from '$lib/types';
 	import {
 		downloads,
@@ -70,20 +69,6 @@
 	function closeMetadataPanel() {
 		isMetadataPanelOpen = false;
 		selectedTrackPath = null;
-	}
-
-	// Lyrics panel state
-	let isLyricsPanelOpen = $state(false);
-	let selectedLyricsTrackPath = $state<string | null>(null);
-
-	function openLyricsPanel(trackPath: string) {
-		selectedLyricsTrackPath = trackPath;
-		isLyricsPanelOpen = true;
-	}
-
-	function closeLyricsPanel() {
-		isLyricsPanelOpen = false;
-		selectedLyricsTrackPath = null;
 	}
 
 	// Navigation state
@@ -541,7 +526,6 @@
 							bind:this={sidePanel}
 							onArtistClick={handleArtistClick}
 							onTrackMetadataClick={openMetadataPanel}
-							onTrackLyricsClick={openLyricsPanel}
 							forcedTab="library"
 							hideTabBar={true}
 						/>
@@ -570,7 +554,6 @@
 			bind:this={sidePanel}
 			onArtistClick={handleArtistClick}
 			onTrackMetadataClick={openMetadataPanel}
-			onTrackLyricsClick={openLyricsPanel}
 			showLargeTitle={true}
 		>
 			{#snippet titleRight()}
@@ -596,11 +579,4 @@
 	isOpen={isMetadataPanelOpen}
 	trackPath={selectedTrackPath}
 	onClose={closeMetadataPanel}
-/>
-
-<!-- Lyrics Panel -->
-<LyricsPanel
-	isOpen={isLyricsPanelOpen}
-	trackPath={selectedLyricsTrackPath}
-	onClose={closeLyricsPanel}
 />

@@ -5,7 +5,7 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { loadMetadataJSON, loadLyricsSidecar } from '$lib/server/metadata';
+// Sidecar JSON metadata removed; only return embedded tags
 import { parseFile } from 'music-metadata';
 import { stat, access, constants } from 'fs/promises';
 import { resolve } from 'path';
@@ -33,8 +33,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Read embedded metadata from audio file
 		const audioMetadata = await parseFile(resolvedTrackPath, { duration: true, skipCovers: true });
 
-		// Read sidecar JSON if it exists
-		const sidecarMetadata = await loadMetadataJSON(resolvedTrackPath);
+		const sidecarMetadata = null;
 
 		// Get file stats
 		const fileStat = await stat(resolvedTrackPath);
@@ -71,31 +70,16 @@ export const GET: RequestHandler = async ({ url }) => {
 			// Genres (can be multiple)
 			genres: audioMetadata.common.genre,
 
-			// MusicBrainz IDs
-			mbid_recording: audioMetadata.native?.vorbis?.find((t) => t.id === 'MUSICBRAINZ_TRACKID')
-				?.value,
-			mbid_release: audioMetadata.native?.vorbis?.find((t) => t.id === 'MUSICBRAINZ_ALBUMID')
-				?.value,
-			mbid_artist: audioMetadata.native?.vorbis?.find((t) => t.id === 'MUSICBRAINZ_ARTISTID')
-				?.value,
-
-			// Lyrics (extract text from ILyricsTag or Vorbis comment)
-			lyrics:
-				audioMetadata.common.lyrics?.[0]?.text ||
-				audioMetadata.native?.vorbis?.find((t) => t.id === 'LYRICS')?.value,
-			syncedLyrics: audioMetadata.native?.vorbis?.find((t) => t.id === 'SYNCEDLYRICS')?.value
+			// MusicBrainz IDs (preserved if embedded)
+			mbid_recording:
+				audioMetadata.native?.vorbis?.find((t) => t.id === 'MUSICBRAINZ_TRACKID')?.value || null,
+			mbid_release:
+				audioMetadata.native?.vorbis?.find((t) => t.id === 'MUSICBRAINZ_ALBUMID')?.value || null,
+			mbid_artist:
+				audioMetadata.native?.vorbis?.find((t) => t.id === 'MUSICBRAINZ_ARTISTID')?.value || null
 		};
 
-		// Check for lyrics sidecar files if not embedded
-		if (!embedded.lyrics && !embedded.syncedLyrics) {
-			const sidecarLyrics = await loadLyricsSidecar(resolvedTrackPath);
-			if (sidecarLyrics.plain) {
-				embedded.lyrics = sidecarLyrics.plain;
-			}
-			if (sidecarLyrics.synced) {
-				embedded.syncedLyrics = sidecarLyrics.synced;
-			}
-		}
+		// No sidecar/enrichment data is returned; response contains embedded tags only
 
 		// Audio format info
 		const format = {
@@ -109,7 +93,6 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		return json({
 			embedded,
-			sidecar: sidecarMetadata,
 			format,
 			filePath: resolvedTrackPath,
 			fileSize: fileStat.size,

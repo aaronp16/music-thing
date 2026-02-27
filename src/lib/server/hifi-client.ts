@@ -1,13 +1,4 @@
-/**
- * hifi-api client for interacting with the Tidal proxy API
- * Supports multiple providers with automatic fallback on rate limit or errors
- */
-
 import { env } from './env';
-
-// =============================================================================
-// Types
-// =============================================================================
 
 export interface Artist {
 	id: number;
@@ -37,7 +28,7 @@ export interface Track {
 	artist: Artist;
 	artists: Artist[];
 	album: Album;
-	isrc?: string; // ISRC code for metadata enrichment
+	isrc?: string;
 }
 
 export interface SearchResult<T> {
@@ -47,23 +38,14 @@ export interface SearchResult<T> {
 	offset: number;
 }
 
-/**
- * Raw album track item from API (wrapped in { item: Track })
- */
 interface AlbumTrackItem {
 	item: Track;
 }
 
-/**
- * Raw album response from API
- */
 interface AlbumApiResponse extends Album {
 	items: AlbumTrackItem[];
 }
 
-/**
- * Normalized album with tracks (after unwrapping)
- */
 export interface AlbumWithTracks extends Album {
 	tracks: Track[];
 }
@@ -84,25 +66,15 @@ export interface CoverUrls {
 
 export type Quality = 'LOSSLESS' | 'HIGH' | 'LOW';
 
-// =============================================================================
-// Provider Management
-// =============================================================================
-
 interface ProviderState {
 	url: string;
 	failedAt?: number;
 	failCount: number;
 }
 
-// Track provider health state
 const providerStates: Map<string, ProviderState> = new Map();
-
-// How long to deprioritize a failed provider (5 minutes)
 const PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
 
-/**
- * Get providers sorted by health (healthy first, then by fail count)
- */
 function getProvidersByPriority(): string[] {
 	const now = Date.now();
 

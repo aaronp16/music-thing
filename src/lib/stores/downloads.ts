@@ -1,14 +1,6 @@
-/**
- * Downloads store - manages active download state for the UI
- */
-
 import { writable, derived } from 'svelte/store';
 import { toasts } from './toasts';
 import { DEFAULT_QUALITY, type Quality } from '$lib/types';
-
-// =============================================================================
-// Types
-// =============================================================================
 
 export interface PendingTrack {
 	id: number;
@@ -39,19 +31,12 @@ export interface DownloadJob {
 	startedAt: number;
 }
 
-// =============================================================================
-// Store
-// =============================================================================
-
 function createDownloadsStore() {
 	const { subscribe, update } = writable<Map<string, DownloadJob>>(new Map());
 
 	return {
 		subscribe,
 
-		/**
-		 * Start a new download job and connect to SSE
-		 */
 		startDownload: async (
 			type: 'track' | 'album',
 			id: number,
@@ -237,9 +222,6 @@ function createDownloadsStore() {
 			return jobId;
 		},
 
-		/**
-		 * Remove a completed/errored job from the list
-		 */
 		removeJob: (jobId: string) => {
 			update((jobs) => {
 				jobs.delete(jobId);
@@ -247,9 +229,6 @@ function createDownloadsStore() {
 			});
 		},
 
-		/**
-		 * Clear all completed jobs
-		 */
 		clearCompleted: () => {
 			update((jobs) => {
 				for (const [jobId, job] of jobs) {
@@ -269,13 +248,6 @@ function createDownloadsStore() {
 
 export const downloads = createDownloadsStore();
 
-// =============================================================================
-// Derived Stores
-// =============================================================================
-
-/**
- * All download items as a flat array (for display)
- */
 export const downloadItems = derived(downloads, ($downloads) => {
 	const items: DownloadItem[] = [];
 	for (const job of $downloads.values()) {
@@ -296,9 +268,6 @@ export const downloadItems = derived(downloads, ($downloads) => {
 	});
 });
 
-/**
- * Currently downloading track IDs (for disabling buttons)
- */
 export const downloadingTrackIds = derived(downloads, ($downloads) => {
 	const ids = new Set<number>();
 	for (const job of $downloads.values()) {
@@ -311,9 +280,6 @@ export const downloadingTrackIds = derived(downloads, ($downloads) => {
 	return ids;
 });
 
-/**
- * Currently downloading album IDs (for disabling buttons)
- */
 export const downloadingAlbumIds = derived(downloads, ($downloads) => {
 	const ids = new Set<number>();
 	for (const job of $downloads.values()) {
@@ -329,9 +295,6 @@ export const downloadingAlbumIds = derived(downloads, ($downloads) => {
 	return ids;
 });
 
-/**
- * Check if there are any active downloads
- */
 export const hasActiveDownloads = derived(downloads, ($downloads) => {
 	for (const job of $downloads.values()) {
 		for (const item of job.items.values()) {

@@ -1,7 +1,3 @@
-/**
- * Download service with progress tracking
- */
-
 import { createWriteStream } from 'fs';
 import { mkdir, access, constants, unlink, copyFile, readdir } from 'fs/promises';
 import path from 'path';
@@ -17,18 +13,8 @@ import {
 	type AlbumWithTracks,
 	type Quality as HifiQuality
 } from './hifi-client';
-import {
-	embedMetadata,
-	extractMetadata,
-	saveMetadataJSON,
-	mergeMetadata,
-	enrichTrackWithMetadata
-} from './metadata';
+import { embedMetadata, extractMetadata } from './metadata';
 import { QUALITY_OPTIONS, DEFAULT_QUALITY, type Quality } from '$lib/types';
-
-// =============================================================================
-// Types
-// =============================================================================
 
 export interface DownloadProgress {
 	id: string;
@@ -37,7 +23,7 @@ export interface DownloadProgress {
 	artistName: string;
 	albumTitle: string;
 	status: 'pending' | 'downloading' | 'complete' | 'error' | 'skipped';
-	progress: number; // 0-100
+	progress: number;
 	bytesDownloaded: number;
 	totalBytes: number;
 	error?: string;
@@ -52,38 +38,18 @@ export interface DownloadJob {
 	progress: Map<number, DownloadProgress>;
 }
 
-// =============================================================================
-// State
-// =============================================================================
-
-// Active download jobs
 const activeJobs = new Map<string, DownloadJob>();
-
-// Progress listeners (for SSE)
 const progressListeners = new Map<string, Set<(progress: DownloadProgress) => void>>();
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * Sanitize filename/folder name
- */
 function sanitize(name: string): string {
 	return name.replace(/[<>:"/\\|*]/g, '_').trim();
 }
 
-/**
- * Get file extension for a quality level
- */
 function getExtension(quality: Quality): string {
 	const option = QUALITY_OPTIONS.find((o) => o.value === quality);
 	return option?.extension || 'flac';
 }
 
-/**
- * Generate file path for a track
- */
 function getFilePath(
 	track: Track,
 	quality: Quality = DEFAULT_QUALITY,
@@ -105,9 +71,6 @@ function getFilePath(
 	return path.join(env.MUSIC_DIR, artistName, folderPath, `${trackNum} - ${trackTitle}.${ext}`);
 }
 
-/**
- * Get album folder path (for cover art)
- */
 function getAlbumPath(track: Track): string {
 	const artistName = sanitize(track.artist?.name || track.artists?.[0]?.name || 'Unknown Artist');
 	const albumTitle = sanitize(track.album?.title || 'Unknown Album');
@@ -116,17 +79,11 @@ function getAlbumPath(track: Track): string {
 	return path.join(env.MUSIC_DIR, artistName, albumTitle);
 }
 
-/**
- * Get artist folder path (for artist image)
- */
 function getArtistPath(track: Track): string {
 	const artistName = sanitize(track.artist?.name || track.artists?.[0]?.name || 'Unknown Artist');
 	return path.join(env.MUSIC_DIR, artistName);
 }
 
-/**
- * Check if file already exists
- */
 async function fileExists(filePath: string): Promise<boolean> {
 	try {
 		await access(filePath, constants.F_OK);
@@ -136,16 +93,10 @@ async function fileExists(filePath: string): Promise<boolean> {
 	}
 }
 
-/**
- * Generate unique job ID
- */
 function generateJobId(): string {
 	return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-/**
- * Notify progress listeners
- */
 function notifyProgress(jobId: string, progress: DownloadProgress) {
 	const listeners = progressListeners.get(jobId);
 	if (listeners) {
@@ -155,9 +106,6 @@ function notifyProgress(jobId: string, progress: DownloadProgress) {
 	}
 }
 
-/**
- * Format bytes to human readable
- */
 export function formatBytes(bytes: number): string {
 	if (bytes === 0) return '0 B';
 	const k = 1024;
@@ -166,27 +114,16 @@ export function formatBytes(bytes: number): string {
 	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-/**
- * Get temp file path for a download
- * Returns null if temp downloads are disabled (dev mode)
- */
 function getTempFilePath(jobId: string, trackId: number, ext: string): string | null {
 	if (!env.TEMP_DIR) return null;
 	return path.join(env.TEMP_DIR, `${jobId}-${trackId}.${ext}`);
 }
 
-/**
- * Move file from temp to final destination (cross-device safe)
- * Uses copy + delete since temp and music dirs are on different filesystems
- */
 async function moveFile(src: string, dest: string): Promise<void> {
 	await copyFile(src, dest);
 	await unlink(src);
 }
 
-/**
- * Safely delete a temp file (ignores errors)
- */
 async function cleanupTempFile(tempPath: string | null): Promise<void> {
 	if (!tempPath) return;
 	try {
@@ -196,11 +133,6 @@ async function cleanupTempFile(tempPath: string | null): Promise<void> {
 	}
 }
 
-/**
- * Initialize temp directory on startup
- * - Creates the directory if it doesn't exist
- * - Cleans up any orphaned files from previous sessions
- */
 export async function initTempDir(): Promise<void> {
 	if (!env.TEMP_DIR) return;
 
@@ -229,13 +161,6 @@ export async function initTempDir(): Promise<void> {
 // Initialize temp directory on module load
 initTempDir();
 
-// =============================================================================
-// Download Logic
-// =============================================================================
-
-/**
- * Download a single track with progress tracking
- */
 async function downloadTrack(
 	track: Track,
 	jobId: string,
@@ -329,30 +254,16 @@ async function downloadTrack(
 			writer.on('error', reject);
 		});
 
-		// Fetch extended metadata (MusicBrainz only - lyrics are separate)
-		const artistName =
-			track.artists?.map((a) => a.name).join(', ') || track.artist?.name || 'Unknown Artist';
-
-		const enrichedMetadata = await enrichTrackWithMetadata({
-			artist: artistName,
-			title: track.title,
-			isrc: track.isrc
-		});
-
-		// Embed metadata (basic + enriched) into audio file
+		// Embed basic metadata into audio file (don't call external enrichment)
 		try {
 			const basicMetadata = extractMetadata(track, totalTracks);
-			const finalMetadata = mergeMetadata(basicMetadata, enrichedMetadata);
 
 			// Check if cover art exists for embedding
 			if (await fileExists(coverPath)) {
-				finalMetadata.coverArtPath = coverPath;
+				basicMetadata.coverArtPath = coverPath;
 			}
 
-			await embedMetadata(downloadPath, finalMetadata);
-
-			// Save sidecar JSON (without coverArtPath)
-			await saveMetadataJSON(downloadPath, finalMetadata);
+			await embedMetadata(downloadPath, basicMetadata);
 		} catch (metadataError) {
 			// Log but don't fail the download if metadata embedding fails
 			console.error('Failed to embed metadata:', metadataError);
@@ -365,8 +276,6 @@ async function downloadTrack(
 			// Move file (copy + delete for cross-device)
 			await moveFile(tempFilePath, actualFilePath);
 		}
-
-		// Note: Lyrics are no longer fetched during download - use separate "Fetch Lyrics" button
 
 		progressState.status = 'complete';
 		progressState.progress = 100;
@@ -384,9 +293,6 @@ async function downloadTrack(
 	}
 }
 
-/**
- * Download cover art for an album
- */
 async function downloadCoverArt(track: Track): Promise<void> {
 	const albumPath = getAlbumPath(track);
 	const coverPath = path.join(albumPath, 'cover.jpg');
@@ -438,10 +344,6 @@ async function downloadCoverArt(track: Track): Promise<void> {
 	}
 }
 
-/**
- * Download artist image (artist.jpg) to the artist folder
- * Fetches artist info from the API to get the picture UUID
- */
 async function downloadArtistImage(track: Track): Promise<void> {
 	const artistPath = getArtistPath(track);
 	const artistImagePath = path.join(artistPath, 'artist.jpg');
@@ -499,13 +401,6 @@ async function downloadArtistImage(track: Track): Promise<void> {
 	}
 }
 
-// =============================================================================
-// Public API
-// =============================================================================
-
-/**
- * Start downloading a single track
- */
 export async function startTrackDownload(
 	track: Track,
 	quality: Quality = DEFAULT_QUALITY
@@ -551,9 +446,6 @@ export async function startTrackDownload(
 	return jobId;
 }
 
-/**
- * Start downloading an album (sequential track downloads)
- */
 export async function startAlbumDownload(
 	albumId: number,
 	quality: Quality = DEFAULT_QUALITY,
@@ -643,16 +535,10 @@ export async function startAlbumDownload(
 	return jobId;
 }
 
-/**
- * Get current job status
- */
 export function getJobStatus(jobId: string): DownloadJob | undefined {
 	return activeJobs.get(jobId);
 }
 
-/**
- * Subscribe to progress updates for a job
- */
 export function subscribeToProgress(
 	jobId: string,
 	listener: (progress: DownloadProgress) => void
