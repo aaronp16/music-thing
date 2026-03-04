@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { libraryRefresh } from '$lib/stores/libraryRefresh';
+
 	interface DiskStats {
 		total: number;
 		free: number;
@@ -23,11 +25,16 @@
 		}
 	}
 
-	// Fetch on mount and refresh every 30 seconds
 	$effect(() => {
 		fetchStats();
 		const interval = setInterval(fetchStats, 30000);
 		return () => clearInterval(interval);
+	});
+
+	$effect(() => {
+		libraryRefresh.subscribe(() => {
+			fetchStats();
+		});
 	});
 
 	function formatBytes(bytes: number): string {
@@ -46,13 +53,15 @@
 
 	// Calculate percentages for each segment
 	const musicPercent = $derived(stats !== null ? (stats.musicDirSize / stats.total) * 100 : 0);
-	const otherUsedPercent = $derived(stats !== null ? ((stats.used - stats.musicDirSize) / stats.total) * 100 : 0);
+	const otherUsedPercent = $derived(
+		stats !== null ? ((stats.used - stats.musicDirSize) / stats.total) * 100 : 0
+	);
 	const freePercent = $derived(stats !== null ? (stats.free / stats.total) * 100 : 0);
 </script>
 
 {#if stats}
-	<div 
-		class="flex flex-col gap-1" 
+	<div
+		class="flex flex-col gap-1"
 		title="Music Library: {musicSizeFormatted}
 Disk Used: {usedFormatted} / {totalFormatted} ({usedPercent.toFixed(1)}%)
 Disk Free: {freeFormatted}
@@ -62,17 +71,17 @@ Path: {stats.path}"
 		<div class="text-[10px] text-neutral-400">
 			{musicSizeFormatted} used · {freeFormatted} free
 		</div>
-		
+
 		<!-- Multi-segment progress bar -->
-		<div class="h-1.5 w-full overflow-hidden rounded-full bg-neutral-700 flex">
+		<div class="flex h-1.5 w-full overflow-hidden rounded-full bg-neutral-700">
 			<!-- Music library segment (green) -->
 			<div
-				class="h-full transition-all duration-300 bg-green-500"
+				class="h-full bg-green-500 transition-all duration-300"
 				style="width: {musicPercent}%"
 			></div>
 			<!-- Other used space segment (yellow/amber) -->
 			<div
-				class="h-full transition-all duration-300 bg-amber-500"
+				class="h-full bg-amber-500 transition-all duration-300"
 				style="width: {otherUsedPercent}%"
 			></div>
 			<!-- Free space is just the empty bg-neutral-700 background -->

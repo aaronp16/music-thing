@@ -1,5 +1,6 @@
 import { writable, derived } from 'svelte/store';
 import { toasts } from './toasts';
+import { libraryRefresh } from './libraryRefresh';
 import { DEFAULT_QUALITY, type Quality } from '$lib/types';
 
 export interface PendingTrack {
@@ -202,6 +203,7 @@ function createDownloadsStore() {
 								if (data.status === 'complete' && previousStatus !== 'complete') {
 									toastedTracks.add(data.trackId);
 									toasts.success(`Downloaded: ${data.trackTitle}`);
+									libraryRefresh.trigger();
 								} else if (data.status === 'error' && previousStatus !== 'error') {
 									toastedTracks.add(data.trackId);
 									toasts.error(`Failed: ${data.trackTitle}${data.error ? ` - ${data.error}` : ''}`);

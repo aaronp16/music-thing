@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { slide } from 'svelte/transition';
 	import { downloadItems } from '$lib/stores/downloads';
-
 	import { formatFileSize } from '$lib/utils/formatFileSize';
+	import { libraryIndex } from '$lib/stores/libraryIndex';
+	import { libraryRefresh } from '$lib/stores/libraryRefresh';
+	import KebabMenu from '$lib/components/KebabMenu.svelte';
+	import ConfirmationDialog from '$lib/components/ConfirmationDialog.svelte';
 
 	interface Props {
 		onArtistClick?: (artistId: number, artistName: string) => void;
@@ -214,6 +217,43 @@
 		searchQuery = '';
 	}
 
+	// Delete dialog state
+	let deleteDialog = $state<{
+		isOpen: boolean;
+		type: 'track' | 'album' | 'artist';
+		path: string;
+		name: string;
+	}>({
+		isOpen: false,
+		type: 'track',
+		path: '',
+		name: ''
+	});
+
+	async function handleDelete() {
+		try {
+			const response = await fetch('/api/library', {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ path: deleteDialog.path, type: deleteDialog.type })
+			});
+
+			if (response.ok) {
+				await fetchLibrary();
+				await libraryIndex.refresh();
+				libraryRefresh.trigger();
+			}
+		} catch (error) {
+			console.error('Delete failed:', error);
+		} finally {
+			deleteDialog.isOpen = false;
+		}
+	}
+
+	function openDeleteDialog(type: 'track' | 'album' | 'artist', path: string, name: string) {
+		deleteDialog = { isOpen: true, type, path, name };
+	}
+
 	// Count active/pending downloads for badge
 	const activeDownloadCount = $derived(
 		$downloadItems.filter((i) => i.status === 'downloading' || i.status === 'pending').length
@@ -409,7 +449,7 @@
 					</div>
 				{:else if filteredLibrary}
 					<div class="space-y-0.5">
-						{#each filteredLibrary.artists as artist}
+						{#each filteredLibrary.artists as artist, index (index)}
 							<div>
 								<button
 									onclick={() => toggleArtist(artist.name)}
@@ -454,13 +494,22 @@
 									<span class="text-xs text-neutral-500">
 										{formatFileSize(artist.totalSize)}
 									</span>
+									<div onclick={(e) => e.stopPropagation()}>
+										<KebabMenu
+											items={[
+												{
+													label: 'Delete Artist',
+													icon: 'delete',
+													danger: true,
+													onClick: () => openDeleteDialog('artist', artist.path, artist.name)
+												}
+											]}
+										/>
+									</div>
 								</button>
 
 								{#if expandedArtists.has(artist.name)}
-									<div
-										class="ml-6 space-y-0.5 border-l border-neutral-800 pl-2"
-										transition:slide={{ duration: 150 }}
-									>
+									<div class="ml-6 space-y-0.5" transition:slide={{ duration: 150 }}>
 										{#each artist.albums as album}
 											{@const hasMultipleDisks = album.disks.length > 1}
 											{@const trackCount = album.disks.reduce((sum, d) => sum + d.tracks.length, 0)}
@@ -512,13 +561,22 @@
 													<span class="text-xs text-neutral-500">
 														{formatFileSize(album.totalSize)}
 													</span>
+													<div onclick={(e) => e.stopPropagation()}>
+														<KebabMenu
+															items={[
+																{
+																	label: 'Delete Album',
+																	icon: 'delete',
+																	danger: true,
+																	onClick: () => openDeleteDialog('album', album.path, album.name)
+																}
+															]}
+														/>
+													</div>
 												</button>
 
 												{#if expandedAlbums.has(album.path)}
-													<div
-														class="ml-6 space-y-0.5 border-l border-neutral-800 pl-2"
-														transition:slide={{ duration: 150 }}
-													>
+													<div class="ml-6 space-y-0.5" transition:slide={{ duration: 150 }}>
 														{#each album.disks as disk}
 															{#if hasMultipleDisks}
 																<div class="px-2 py-1 text-xs font-medium text-neutral-500">
@@ -527,38 +585,51 @@
 															{/if}
 															{#each disk.tracks as track}
 																<div
-																	role="button"
-																	tabindex="0"
-																	onclick={() => onTrackMetadataClick?.(track.path)}
-																	class="group/track flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm text-neutral-400 transition-colors hover:bg-neutral-800/50"
+																	class="group/track flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-400 transition-colors hover:bg-neutral-800/50"
 																>
-																	<svg
-																		class="h-3.5 w-3.5 flex-shrink-0 text-neutral-600"
-																		fill="currentColor"
-																		viewBox="0 0 24 24"
+																	<button
+																		type="button"
+																		onclick={() => onTrackMetadataClick?.(track.path)}
+																		class="flex flex-1 items-center gap-2 text-left"
+																		title="View metadata"
 																	>
-																		<path
-																			d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
+																		<span
+																			class="rounded px-1.5 py-0.5 text-[10px] font-medium {track.format ===
+																			'FLAC'
+																				? 'bg-green-900/50 text-green-400'
+																				: track.format === 'AAC'
+																					? 'bg-orange-900/50 text-orange-400'
+																					: track.format === 'MP3'
+																						? 'bg-purple-900/50 text-purple-400'
+																						: 'bg-neutral-800 text-neutral-400'}"
+																		>
+																			{track.format}
+																		</span>
+																		<span class="flex-1 truncate"
+																			>{track.name.replace(/\.(flac|m4a|mp3|wav|ogg)$/i, '')}</span
+																		>
+																		<span class="text-xs text-neutral-600"
+																			>{formatFileSize(track.size)}</span
+																		>
+																	</button>
+																	<div onclick={(e) => e.stopPropagation()}>
+																		<KebabMenu
+																			items={[
+																				{
+																					label: 'View Metadata',
+																					icon: 'metadata',
+																					onClick: () => onTrackMetadataClick?.(track.path)
+																				},
+																				{
+																					label: 'Delete Track',
+																					icon: 'delete',
+																					danger: true,
+																					onClick: () =>
+																						openDeleteDialog('track', track.path, track.name)
+																				}
+																			]}
 																		/>
-																	</svg>
-																	<span class="flex-1 truncate"
-																		>{track.name.replace(/\.(flac|m4a|mp3|wav|ogg)$/i, '')}</span
-																	>
-																	<span
-																		class="rounded px-1.5 py-0.5 text-[10px] font-medium {track.format ===
-																		'FLAC'
-																			? 'bg-green-900/50 text-green-400'
-																			: track.format === 'AAC'
-																				? 'bg-orange-900/50 text-orange-400'
-																				: track.format === 'MP3'
-																					? 'bg-purple-900/50 text-purple-400'
-																					: 'bg-neutral-800 text-neutral-400'}"
-																	>
-																		{track.format}
-																	</span>
-																	<span class="text-xs text-neutral-600"
-																		>{formatFileSize(track.size)}</span
-																	>
+																	</div>
 																</div>
 															{/each}
 														{/each}
@@ -576,3 +647,18 @@
 		</div>
 	{/if}
 </div>
+
+<ConfirmationDialog
+	isOpen={deleteDialog.isOpen}
+	title={deleteDialog.type === 'track'
+		? 'Delete Track'
+		: deleteDialog.type === 'album'
+			? 'Delete Album'
+			: 'Delete Artist'}
+	message="Are you sure you want to delete &quot;{deleteDialog.name}&quot;? This action cannot be undone."
+	confirmLabel="Delete"
+	cancelLabel="Cancel"
+	danger
+	onConfirm={handleDelete}
+	onCancel={() => (deleteDialog.isOpen = false)}
+/>
