@@ -153,7 +153,7 @@ export function getProviderStatus(): { url: string; healthy: boolean; failCount:
 // API Client
 // =============================================================================
 
-class HifiApiError extends Error {
+export class HifiApiError extends Error {
 	constructor(
 		message: string,
 		public status: number,

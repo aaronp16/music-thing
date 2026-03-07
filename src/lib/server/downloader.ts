@@ -8,6 +8,7 @@ import {
 	getArtistImageUrl,
 	getAlbum,
 	getArtistInfo,
+	HifiApiError,
 	type Track,
 	type Album,
 	type AlbumWithTracks,
@@ -290,7 +291,9 @@ async function downloadTrack(
 		await cleanupTempFile(tempFilePath);
 
 		progressState.status = 'error';
-		progressState.error = error instanceof Error ? error.message : 'Download failed';
+		const baseMessage = error instanceof Error ? error.message : 'Download failed';
+		const provider = error instanceof HifiApiError ? error.provider : undefined;
+		progressState.error = provider ? `${baseMessage} (${provider})` : baseMessage;
 		onProgress(progressState);
 		return progressState;
 	}
