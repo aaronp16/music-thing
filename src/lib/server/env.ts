@@ -6,8 +6,16 @@
  * Default API providers in priority order
  */
 export const DEFAULT_API_PROVIDERS = [
-	'https://triton.squid.wtf',
-	'https://api.monochrome.tf'
+	'https://api.monochrome.tf',
+	'https://wolf.qqdl.site',
+	'https://maus.qqdl.site',
+	'https://vogel.qqdl.site',
+	'https://katze.qqdl.site',
+	'https://hund.qqdl.site'
+	// 'https://tidal.kinoplus.online'     // broken - Upstream API error on /track/
+	// 'https://triton.squid.wtf',     // broken - 403 on /track/
+	// 'https://eu-central.monochrome.tf', // broken - 403 on /track/
+	// 'https://us-west.monochrome.tf'     // broken - 403 on /track/
 ];
 
 /**
@@ -17,7 +25,10 @@ export const DEFAULT_API_PROVIDERS = [
 function getApiProviders(): string[] {
 	const envProviders = process.env.API_PROVIDERS;
 	if (envProviders) {
-		return envProviders.split(',').map((p) => p.trim()).filter(Boolean);
+		return envProviders
+			.split(',')
+			.map((p) => p.trim())
+			.filter(Boolean);
 	}
 	// Legacy single provider support
 	if (process.env.API_BASE_URL) {

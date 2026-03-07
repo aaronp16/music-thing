@@ -12,7 +12,10 @@ import { env } from '$lib/server/env';
  * Sanitize name to match how files are saved
  */
 function sanitize(name: string): string {
-	return name.replace(/[<>:"/\\|*]/g, '_').trim();
+	return name
+		.replace(/:/g, ' -')
+		.replace(/[<>"/\\|*]/g, '_')
+		.trim();
 }
 
 /**

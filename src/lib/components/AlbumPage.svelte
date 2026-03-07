@@ -103,7 +103,10 @@
 
 	// Helper to sanitize names for library lookup
 	function sanitize(name: string): string {
-		return name.replace(/[<>:"/\\|?*]/g, '_').trim();
+		return name
+			.replace(/:/g, ' -')
+			.replace(/[<>"/\\|?*]/g, '_')
+			.trim();
 	}
 
 	// Make track key for library lookup

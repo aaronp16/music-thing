@@ -31,7 +31,10 @@
 	const artistName = $derived(track.artists?.map((a) => a.name).join(', ') || track.artist.name);
 
 	function sanitize(name: string): string {
-		return name.replace(/[<>:"/\\|?*]/g, '_').trim();
+		return name
+			.replace(/:/g, ' -')
+			.replace(/[<>"/\\|?*]/g, '_')
+			.trim();
 	}
 
 	// Check if track is in library (reactive)

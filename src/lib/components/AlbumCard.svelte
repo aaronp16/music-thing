@@ -25,7 +25,10 @@
 
 	// Helper to sanitize names (same as server)
 	function sanitize(name: string): string {
-		return name.replace(/[<>:"/\\|?*]/g, '_').trim();
+		return name
+			.replace(/:/g, ' -')
+			.replace(/[<>"/\\|?*]/g, '_')
+			.trim();
 	}
 
 	// Library status for the album (reactive)

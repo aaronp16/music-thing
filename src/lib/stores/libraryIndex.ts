@@ -22,7 +22,10 @@ interface LibraryIndexState {
  * Sanitize name to match how files are saved (same as server)
  */
 function sanitize(name: string): string {
-	return name.replace(/[<>:"/\\|*]/g, '_').trim();
+	return name
+		.replace(/:/g, ' -')
+		.replace(/[<>"/\\|*]/g, '_')
+		.trim();
 }
 
 /**

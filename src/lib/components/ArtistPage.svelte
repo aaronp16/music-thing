@@ -117,7 +117,10 @@
 
 	// Helper to sanitize names for library lookup
 	function sanitize(name: string): string {
-		return name.replace(/[<>:"/\\|?*]/g, '_').trim();
+		return name
+			.replace(/:/g, ' -')
+			.replace(/[<>"/\\|?*]/g, '_')
+			.trim();
 	}
 
 	// Check if a track is in library

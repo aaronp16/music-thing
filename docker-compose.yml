@@ -4,9 +4,9 @@ services:
     container_name: music-thing
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
-      - API_BASE_URL=${API_BASE_URL:-https://triton.squid.wtf}
+      - API_BASE_URL=${API_BASE_URL:-https://api.monochrome.tf}
       - MUSIC_DIR=/music
     volumes:
       - ./music:/music
