@@ -33,7 +33,6 @@ RUN mkdir -p /music
 
 # Environment variables
 ENV NODE_ENV=production
-ENV API_BASE_URL=https://triton.squid.wtf
 ENV MUSIC_DIR=/music
 ENV PORT=3000
 ENV HOST=0.0.0.0

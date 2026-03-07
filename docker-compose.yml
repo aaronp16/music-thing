@@ -6,7 +6,7 @@ services:
     ports:
       - '3000:3000'
     environment:
-      - API_BASE_URL=${API_BASE_URL:-https://api.monochrome.tf}
+      - API_BASE_URL=${API_BASE_URL:-}
       - MUSIC_DIR=/music
     volumes:
       - ./music:/music
