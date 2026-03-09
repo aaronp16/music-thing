@@ -199,6 +199,20 @@ async function apiRequest<T>(endpoint: string): Promise<T> {
 			const response = await fetch(url);
 
 			if (!response.ok) {
+				// Check if this is a proxy-level error (not a real Tidal API rejection)
+				// Proxies return 403 with "Upstream API error" when their Tidal connection is broken
+				let isProxyError = false;
+				if (response.status === 403) {
+					try {
+						const body = await response.clone().json();
+						if (body.detail === 'Upstream API error') {
+							isProxyError = true;
+						}
+					} catch {
+						// Ignore JSON parse errors
+					}
+				}
+
 				const error = new HifiApiError(
 					`API request failed: ${response.statusText}`,
 					response.status,
@@ -206,17 +220,17 @@ async function apiRequest<T>(endpoint: string): Promise<T> {
 					baseUrl
 				);
 
-				// If retryable, mark provider and try next
-				if (isRetryableError(response.status)) {
+				// If retryable (rate limit, server error, or proxy error), mark provider and try next
+				if (isRetryableError(response.status) || isProxyError) {
 					markProviderFailed(baseUrl);
 					lastError = error;
 					console.warn(
-						`[hifi-client] ${baseUrl} returned ${response.status}, trying next provider...`
+						`[hifi-client] ${baseUrl} returned ${response.status}${isProxyError ? ' (proxy error)' : ''}, trying next provider...`
 					);
 					continue;
 				}
 
-				// Non-retryable error (4xx except 429), throw immediately
+				// Non-retryable error (4xx except 429 and proxy errors), throw immediately
 				throw error;
 			}
 
@@ -273,6 +287,19 @@ async function apiRequestRaw<T>(endpoint: string): Promise<T> {
 			const response = await fetch(url);
 
 			if (!response.ok) {
+				// Check if this is a proxy-level error (not a real Tidal API rejection)
+				let isProxyError = false;
+				if (response.status === 403) {
+					try {
+						const body = await response.clone().json();
+						if (body.detail === 'Upstream API error') {
+							isProxyError = true;
+						}
+					} catch {
+						// Ignore JSON parse errors
+					}
+				}
+
 				const error = new HifiApiError(
 					`API request failed: ${response.statusText}`,
 					response.status,
@@ -280,11 +307,11 @@ async function apiRequestRaw<T>(endpoint: string): Promise<T> {
 					baseUrl
 				);
 
-				if (isRetryableError(response.status)) {
+				if (isRetryableError(response.status) || isProxyError) {
 					markProviderFailed(baseUrl);
 					lastError = error;
 					console.warn(
-						`[hifi-client] ${baseUrl} returned ${response.status}, trying next provider...`
+						`[hifi-client] ${baseUrl} returned ${response.status}${isProxyError ? ' (proxy error)' : ''}, trying next provider...`
 					);
 					continue;
 				}

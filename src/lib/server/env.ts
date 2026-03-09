@@ -7,15 +7,16 @@
  */
 export const DEFAULT_API_PROVIDERS = [
 	'https://api.monochrome.tf',
-	'https://wolf.qqdl.site',
-	'https://maus.qqdl.site',
-	'https://vogel.qqdl.site',
-	'https://katze.qqdl.site',
-	'https://hund.qqdl.site'
-	// 'https://tidal.kinoplus.online'     // broken - Upstream API error on /track/
-	// 'https://triton.squid.wtf',     // broken - 403 on /track/
-	// 'https://eu-central.monochrome.tf', // broken - 403 on /track/
-	// 'https://us-west.monochrome.tf'     // broken - 403 on /track/
+	'https://triton.squid.wtf'
+	// Broken - all return 403 "Upstream API error" on /track/
+	// 'https://wolf.qqdl.site',
+	// 'https://maus.qqdl.site',
+	// 'https://vogel.qqdl.site',
+	// 'https://katze.qqdl.site',
+	// 'https://hund.qqdl.site',
+	// 'https://eu-central.monochrome.tf',
+	// 'https://us-west.monochrome.tf',
+	// 'https://tidal.kinoplus.online'
 ];
 
 /**
