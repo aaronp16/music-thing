@@ -6,9 +6,14 @@
  * Default API providers in priority order
  */
 export const DEFAULT_API_PROVIDERS = [
-	'https://api.monochrome.tf',
-	'https://triton.squid.wtf'
-	// Broken - all return 403 "Upstream API error" on /track/
+	'https://ohio-1.monochrome.tf',
+	'https://singapore-1.monochrome.tf',
+	'https://frankfurt-1.monochrome.tf',
+	'https://hifi.geeked.wtf',
+	'https://hifi-one.spotisaver.net'
+	// Currently broken for /track/
+	// 'https://api.monochrome.tf',
+	// 'https://triton.squid.wtf',
 	// 'https://wolf.qqdl.site',
 	// 'https://maus.qqdl.site',
 	// 'https://vogel.qqdl.site',
@@ -16,7 +21,8 @@ export const DEFAULT_API_PROVIDERS = [
 	// 'https://hund.qqdl.site',
 	// 'https://eu-central.monochrome.tf',
 	// 'https://us-west.monochrome.tf',
-	// 'https://tidal.kinoplus.online'
+	// 'https://tidal.kinoplus.online',
+	// 'https://monochrome-api.samidy.com'
 ];
 
 /**

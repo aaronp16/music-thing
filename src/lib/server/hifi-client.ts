@@ -85,21 +85,21 @@ function getProvidersByPriority(): string[] {
 		}
 	}
 
-	return [...env.API_PROVIDERS].sort((a, b) => {
-		const stateA = providerStates.get(a)!;
-		const stateB = providerStates.get(b)!;
+	const readyProviders: string[] = [];
+	const coolingProviders: string[] = [];
 
-		// Check if providers are in cooldown
-		const aCooldown = stateA.failedAt && now - stateA.failedAt < PROVIDER_COOLDOWN_MS;
-		const bCooldown = stateB.failedAt && now - stateB.failedAt < PROVIDER_COOLDOWN_MS;
+	for (const url of env.API_PROVIDERS) {
+		const state = providerStates.get(url)!;
+		const inCooldown = state.failedAt && now - state.failedAt < PROVIDER_COOLDOWN_MS;
 
-		// Providers not in cooldown come first
-		if (aCooldown && !bCooldown) return 1;
-		if (!aCooldown && bCooldown) return -1;
+		if (inCooldown) {
+			coolingProviders.push(url);
+		} else {
+			readyProviders.push(url);
+		}
+	}
 
-		// Sort by fail count (fewer failures first)
-		return stateA.failCount - stateB.failCount;
-	});
+	return [...readyProviders, ...coolingProviders];
 }
 
 /**
@@ -165,6 +165,34 @@ export class HifiApiError extends Error {
 	}
 }
 
+async function isProxyUpstreamError(response: Response): Promise<boolean> {
+	if (response.status !== 403) {
+		return false;
+	}
+
+	try {
+		const body = await response.clone().json();
+		return body.detail === 'Upstream API error';
+	} catch {
+		return false;
+	}
+}
+
+function createAllProvidersFailedError(
+	endpoint: string,
+	attemptedProviders: string[],
+	lastError: Error | null
+): Error {
+	const providers = attemptedProviders.join(', ');
+	const suffix = providers ? ` Tried: ${providers}` : '';
+
+	if (lastError instanceof HifiApiError) {
+		return new HifiApiError(`All API providers failed.${suffix}`, lastError.status, endpoint);
+	}
+
+	return new Error(`All API providers failed.${suffix}`);
+}
+
 /**
  * hifi-api wraps most responses in { version, data: T }
  * Some endpoints (like /artist/) return { version, ...T } directly
@@ -191,27 +219,17 @@ function isRetryableError(status: number): boolean {
 async function apiRequest<T>(endpoint: string): Promise<T> {
 	const providers = getProvidersByPriority();
 	let lastError: Error | null = null;
+	const attemptedProviders: string[] = [];
 
 	for (const baseUrl of providers) {
 		const url = `${baseUrl}${endpoint}`;
+		attemptedProviders.push(baseUrl);
 
 		try {
 			const response = await fetch(url);
 
 			if (!response.ok) {
-				// Check if this is a proxy-level error (not a real Tidal API rejection)
-				// Proxies return 403 with "Upstream API error" when their Tidal connection is broken
-				let isProxyError = false;
-				if (response.status === 403) {
-					try {
-						const body = await response.clone().json();
-						if (body.detail === 'Upstream API error') {
-							isProxyError = true;
-						}
-					} catch {
-						// Ignore JSON parse errors
-					}
-				}
+				const isProxyError = await isProxyUpstreamError(response);
 
 				const error = new HifiApiError(
 					`API request failed: ${response.statusText}`,
@@ -268,8 +286,7 @@ async function apiRequest<T>(endpoint: string): Promise<T> {
 		}
 	}
 
-	// All providers failed
-	throw lastError || new Error('All API providers failed');
+	throw createAllProvidersFailedError(endpoint, attemptedProviders, lastError);
 }
 
 /**
@@ -279,26 +296,17 @@ async function apiRequest<T>(endpoint: string): Promise<T> {
 async function apiRequestRaw<T>(endpoint: string): Promise<T> {
 	const providers = getProvidersByPriority();
 	let lastError: Error | null = null;
+	const attemptedProviders: string[] = [];
 
 	for (const baseUrl of providers) {
 		const url = `${baseUrl}${endpoint}`;
+		attemptedProviders.push(baseUrl);
 
 		try {
 			const response = await fetch(url);
 
 			if (!response.ok) {
-				// Check if this is a proxy-level error (not a real Tidal API rejection)
-				let isProxyError = false;
-				if (response.status === 403) {
-					try {
-						const body = await response.clone().json();
-						if (body.detail === 'Upstream API error') {
-							isProxyError = true;
-						}
-					} catch {
-						// Ignore JSON parse errors
-					}
-				}
+				const isProxyError = await isProxyUpstreamError(response);
 
 				const error = new HifiApiError(
 					`API request failed: ${response.statusText}`,
@@ -347,7 +355,7 @@ async function apiRequestRaw<T>(endpoint: string): Promise<T> {
 		}
 	}
 
-	throw lastError || new Error('All API providers failed');
+	throw createAllProvidersFailedError(endpoint, attemptedProviders, lastError);
 }
 
 // =============================================================================
@@ -608,25 +616,28 @@ export async function getSimilarArtists(artistId: number): Promise<{ artists: Si
 export async function getSimilarAlbums(albumId: number): Promise<{ albums: Album[] }> {
 	const providers = getProvidersByPriority();
 	let lastResult: { albums: Album[] } | null = null;
+	const endpoint = `/album/similar/?id=${albumId}`;
 
 	for (const baseUrl of providers) {
-		const url = `${baseUrl}/album/similar/?id=${albumId}`;
+		const url = `${baseUrl}${endpoint}`;
 
 		try {
 			const response = await fetch(url);
 
 			if (!response.ok) {
-				if (isRetryableError(response.status)) {
+				const isProxyError = await isProxyUpstreamError(response);
+
+				if (isRetryableError(response.status) || isProxyError) {
 					markProviderFailed(baseUrl);
 					console.warn(
-						`[hifi-client] ${baseUrl} returned ${response.status} for similar albums, trying next provider...`
+						`[hifi-client] ${baseUrl} returned ${response.status}${isProxyError ? ' (proxy error)' : ''} for similar albums, trying next provider...`
 					);
 					continue;
 				}
 				throw new HifiApiError(
 					`API request failed: ${response.statusText}`,
 					response.status,
-					`/album/similar/?id=${albumId}`,
+					endpoint,
 					baseUrl
 				);
 			}
